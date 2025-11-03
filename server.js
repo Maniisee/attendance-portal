@@ -12,6 +12,9 @@ const MemoryStorage = require('./memory-storage');
 const app = express();
 const port = process.env.PORT || 8080;
 
+// Configure trust proxy for Railway
+app.set('trust proxy', 1);
+
 // Load environment variables first
 require('dotenv').config();
 
