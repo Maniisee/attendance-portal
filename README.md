@@ -5,6 +5,13 @@ A modern, secure web-based attendance management system with QR code scanning ca
 ## 🚀 Live Demo
 **[View Live Application](https://attendance-web-production-23d0.up.railway.app)** 
 
+### 📊 System Status
+- **Health Check**: [/health](https://attendance-web-production-23d0.up.railway.app/health)
+- **Detailed Status**: [/status](https://attendance-web-production-23d0.up.railway.app/status)
+- **Current Status**: ✅ Running with resilient architecture
+
+> 🔧 **Note**: Application features graceful fallback handling for database connectivity issues. 
+
 ## ✨ Features
 
 ### 🎯 Core Functionality

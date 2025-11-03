@@ -170,6 +170,11 @@ app.get('/students', (req, res) => {
   res.sendFile(path.join(__dirname, 'students.html'));
 });
 
+// Status page for monitoring database connection
+app.get('/status', (req, res) => {
+  res.sendFile(path.join(__dirname, 'status.html'));
+});
+
 // Serve attendance and scan pages
 app.get('/attendance.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'attendance.html'));
