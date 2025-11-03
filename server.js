@@ -327,13 +327,7 @@ app.post('/add-student', async (req, res) => {
   console.log('📝 Student registration request received');
   console.log('Content-Type:', req.headers['content-type']);
   console.log('Request body:', req.body);
-  
-  if (!req.dbConnected) {
-    return res.status(503).json({ 
-      error: 'Database service unavailable',
-      message: 'Cannot register students at this time'
-    });
-  }
+  console.log('📊 Storage type:', req.dbConnected ? 'database' : 'memory');
   
   const {
     studentId,
@@ -372,28 +366,59 @@ app.post('/add-student', async (req, res) => {
     // Auto-generate student ID if not provided
     let finalStudentId = studentId;
     if (!finalStudentId) {
-      const countResult = await pool.query('SELECT COUNT(*) FROM students');
-      const count = parseInt(countResult.rows[0].count) + 1;
-      finalStudentId = `STU${count.toString().padStart(4, '0')}`;
+      if (req.dbConnected) {
+        const countResult = await pool.query('SELECT COUNT(*) FROM students');
+        const count = parseInt(countResult.rows[0].count) + 1;
+        finalStudentId = `STU${count.toString().padStart(4, '0')}`;
+      } else {
+        const students = await memoryStorage.getStudents();
+        const count = students.total + 1;
+        finalStudentId = `STU${count.toString().padStart(4, '0')}`;
+      }
     }
     
-    // Check if student ID already exists
-    const existingStudent = await pool.query(
-      'SELECT student_id FROM students WHERE student_id = $1',
-      [finalStudentId]
-    );
-    
-    if (existingStudent.rows.length > 0) {
-      return res.status(400).send('<h2>Student ID already exists</h2><a href="/students">Back to Students</a>');
+    // Check if student ID already exists and insert student
+    if (req.dbConnected) {
+      const existingStudent = await pool.query(
+        'SELECT student_id FROM students WHERE student_id = $1',
+        [finalStudentId]
+      );
+      
+      if (existingStudent.rows.length > 0) {
+        return res.status(400).send('<h2>Student ID already exists</h2><a href="/students">Back to Students</a>');
+      }
+      
+      const result = await pool.query(
+        `INSERT INTO students (student_id, name, first_name, last_name, phone, email, parent_mobile, class, division, dob, gender, address1, address2, city, state) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
+        [finalStudentId, fullName, firstName, lastName, phoneNumber, email, parent_mobile, studentClass, division, dob, gender, address1, address2, city, state]
+      );
+      console.log('✅ Student inserted to database:', result.rows[0]);
+      var newStudent = result.rows[0];
+    } else {
+      // Use memory storage
+      const studentData = {
+        student_id: finalStudentId,
+        name: fullName,
+        first_name: firstName,
+        last_name: lastName,
+        phone: phoneNumber,
+        email: email,
+        parent_mobile: parent_mobile,
+        class: studentClass,
+        division: division,
+        dob: dob,
+        gender: gender,
+        address1: address1,
+        address2: address2,
+        city: city,
+        state: state
+      };
+      
+      const result = await memoryStorage.addStudent(studentData);
+      console.log('✅ Student added to memory storage:', result.rows[0]);
+      var newStudent = result.rows[0];
     }
-    
-    const result = await pool.query(
-      `INSERT INTO students (student_id, name, first_name, last_name, phone, email, parent_mobile, class, division, dob, gender, address1, address2, city, state) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
-      [finalStudentId, fullName, firstName, lastName, phoneNumber, email, parent_mobile, studentClass, division, dob, gender, address1, address2, city, state]
-    );
-    console.log('Student inserted successfully:', result.rows[0]);
-    const newStudent = result.rows[0];
 
     // Generate QR code using Python service
     try {
@@ -439,6 +464,7 @@ app.post('/add-student', async (req, res) => {
           <p><strong>Phone:</strong> ${phoneNumber || 'N/A'}</p>
           <p><strong>Date of Birth:</strong> ${dob || 'N/A'}</p>
           <p><strong>Gender:</strong> ${gender || 'N/A'}</p>
+          <p><strong>Storage:</strong> <span style="color: ${req.dbConnected ? '#28a745' : '#ffc107'};">${req.dbConnected ? 'Database' : 'Memory (Temporary)'}</span></p>
         </div>
         <div style="margin:24px 0; text-align: center;">
           <h3>Student QR Code:</h3>
