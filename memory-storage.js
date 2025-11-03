@@ -37,17 +37,32 @@ class MemoryStorage {
     }
     
     const existingByEmail = this.students.find(s => s.email === student.email);
-    if (existingByEmail) {
+    if (existingByEmail && student.email) {
       throw { constraint: 'students_email_key' };
     }
     
     const newStudent = {
       id: this.nextStudentId++,
-      ...student,
+      student_id: student.student_id,
+      name: student.name,
+      first_name: student.first_name,
+      last_name: student.last_name,
+      phone: student.phone,
+      email: student.email,
+      parent_mobile: student.parent_mobile,
+      class: student.class,
+      division: student.division,
+      dob: student.dob,
+      gender: student.gender,
+      address1: student.address1,
+      address2: student.address2,
+      city: student.city,
+      state: student.state,
       created_at: new Date()
     };
     
     this.students.push(newStudent);
+    console.log(`📝 Student added to memory storage: ${newStudent.name} (${newStudent.student_id})`);
     return { rows: [newStudent] };
   }
   
@@ -115,7 +130,21 @@ class MemoryStorage {
     return {
       students: this.students.length,
       attendance_records: this.attendance.length,
-      storage_type: 'memory'
+      storage_type: 'memory',
+      sample_students: this.students.slice(0, 3).map(s => ({
+        id: s.student_id,
+        name: s.name,
+        class: s.class
+      }))
+    };
+  }
+  
+  // Get all data (for debugging)
+  getAllData() {
+    return {
+      students: this.students,
+      attendance: this.attendance,
+      admins: this.admins
     };
   }
 }
