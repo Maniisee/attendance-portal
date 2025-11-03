@@ -305,6 +305,11 @@ app.get('/test-form', (req, res) => {
   res.sendFile(path.join(__dirname, 'test-form.html'));
 });
 
+// Debug form for step-by-step testing
+app.get('/debug-form', (req, res) => {
+  res.sendFile(path.join(__dirname, 'debug-form.html'));
+});
+
 // Status page for monitoring database connection
 app.get('/status', (req, res) => {
   res.sendFile(path.join(__dirname, 'status.html'));
