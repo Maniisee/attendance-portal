@@ -34,41 +34,64 @@ const pool = new Pool({
 });
 
 // Test database connection and initialize tables
+let dbConnected = false;
+
 async function initializeDatabase() {
-  try {
-    const client = await pool.connect();
-    console.log('✅ Connected to PostgreSQL database successfully');
-    
-    // Create tables if they don't exist
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS students (
-        id SERIAL PRIMARY KEY,
-        student_id VARCHAR(50) UNIQUE NOT NULL,
-        name VARCHAR(100) NOT NULL,
-        email VARCHAR(100) UNIQUE NOT NULL,
-        phone VARCHAR(20),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-    
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS attendance (
-        id SERIAL PRIMARY KEY,
-        student_id VARCHAR(50) NOT NULL,
-        date DATE NOT NULL,
-        time TIME NOT NULL,
-        status VARCHAR(20) DEFAULT 'present',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (student_id) REFERENCES students(student_id)
-      );
-    `);
-    
-    console.log('✅ Database tables initialized successfully');
-    client.release();
-  } catch (err) {
-    console.error('❌ Database connection failed:', err.message);
-    console.error('Please check your database configuration');
+  let retryCount = 0;
+  const maxRetries = 3;
+  
+  while (retryCount < maxRetries && !dbConnected) {
+    try {
+      console.log(`🔄 Attempting database connection (${retryCount + 1}/${maxRetries})...`);
+      const client = await pool.connect();
+      console.log('✅ Connected to PostgreSQL database successfully');
+      
+      // Create tables if they don't exist
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS students (
+          id SERIAL PRIMARY KEY,
+          student_id VARCHAR(50) UNIQUE NOT NULL,
+          name VARCHAR(100) NOT NULL,
+          email VARCHAR(100) UNIQUE NOT NULL,
+          phone VARCHAR(20),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS attendance (
+          id SERIAL PRIMARY KEY,
+          student_id VARCHAR(50) NOT NULL,
+          date DATE NOT NULL,
+          time TIME NOT NULL,
+          status VARCHAR(20) DEFAULT 'present',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      
+      console.log('✅ Database tables initialized successfully');
+      client.release();
+      dbConnected = true;
+      return;
+    } catch (err) {
+      retryCount++;
+      console.error(`❌ Database connection attempt ${retryCount} failed:`, err.message);
+      if (retryCount < maxRetries) {
+        console.log(`⏳ Retrying in 5 seconds...`);
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+    }
   }
+  
+  if (!dbConnected) {
+    console.error('❌ All database connection attempts failed. Running in limited mode.');
+    console.error('⚠️  Database features will be unavailable until connection is restored.');
+  }
+}
+
+// Helper function to check database connection
+function isDbConnected() {
+  return dbConnected;
 }
 
 // Initialize database on startup
@@ -118,6 +141,21 @@ app.use(express.static(__dirname));
 // Serve QR code images from /qrcodes
 app.use('/qrcodes', express.static(path.join(__dirname, 'qrcodes')));
 
+// Add middleware to handle database connection status
+app.use((req, res, next) => {
+  req.dbConnected = isDbConnected();
+  next();
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'running',
+    database: req.dbConnected ? 'connected' : 'disconnected',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Root route - serve login page
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'login.html'));
@@ -147,6 +185,13 @@ app.get('/dashboard', (req, res) => {
 
 // API to get students with pagination and QR code URL
 app.get('/api/students', async (req, res) => {
+  if (!req.dbConnected) {
+    return res.status(503).json({ 
+      error: 'Database service unavailable',
+      message: 'Student data temporarily unavailable'
+    });
+  }
+  
   const page = parseInt(req.query.page) || 1;
   const pageSize = 20;
   const offset = (page - 1) * pageSize;
@@ -186,6 +231,10 @@ app.post('/dashboard', async (req, res) => {
   // Input validation
   if (!username || !password) {
     return res.status(400).send('<h2>Username and password are required</h2><a href="/login.html">Try again</a>');
+  }
+
+  if (!req.dbConnected) {
+    return res.status(503).send('<h2>Database service unavailable</h2><p>Please try again later</p><a href="/login.html">Back to login</a>');
   }
 
   try {
@@ -241,6 +290,13 @@ app.post('/add-student', async (req, res) => {
   console.log('📝 Student registration request received');
   console.log('Content-Type:', req.headers['content-type']);
   console.log('Request body:', req.body);
+  
+  if (!req.dbConnected) {
+    return res.status(503).json({ 
+      error: 'Database service unavailable',
+      message: 'Cannot register students at this time'
+    });
+  }
   
   const {
     studentId,
