@@ -7,6 +7,7 @@ const path = require('path');
 const bcrypt = require('bcrypt');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const MemoryStorage = require('./memory-storage');
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -35,6 +36,7 @@ const pool = new Pool({
 
 // Test database connection and initialize tables
 let dbConnected = false;
+let memoryStorage = null;
 
 async function initializeDatabase() {
   let retryCount = 0;
@@ -69,6 +71,23 @@ async function initializeDatabase() {
         );
       `);
       
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS admins (
+          id SERIAL PRIMARY KEY,
+          username VARCHAR(50) UNIQUE NOT NULL,
+          password_hash VARCHAR(255) NOT NULL,
+          email VARCHAR(100),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      
+      // Insert default admin if not exists
+      await client.query(`
+        INSERT INTO admins (username, password_hash, email) 
+        VALUES ('admin', 'admin123', 'admin@attendance.portal') 
+        ON CONFLICT (username) DO NOTHING
+      `);
+      
       console.log('✅ Database tables initialized successfully');
       client.release();
       dbConnected = true;
@@ -84,14 +103,20 @@ async function initializeDatabase() {
   }
   
   if (!dbConnected) {
-    console.error('❌ All database connection attempts failed. Running in limited mode.');
-    console.error('⚠️  Database features will be unavailable until connection is restored.');
+    console.error('❌ All database connection attempts failed. Initializing memory storage...');
+    memoryStorage = new MemoryStorage();
+    console.log('✅ Memory storage ready - application can accept data temporarily');
   }
 }
 
 // Helper function to check database connection
 function isDbConnected() {
   return dbConnected;
+}
+
+// Helper function to get storage (database or memory)
+function getStorage() {
+  return dbConnected ? pool : memoryStorage;
 }
 
 // Initialize database on startup
@@ -152,6 +177,7 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'running',
     database: req.dbConnected ? 'connected' : 'disconnected',
+    storage: req.dbConnected ? 'postgresql' : 'memory',
     timestamp: new Date().toISOString()
   });
 });
@@ -190,24 +216,26 @@ app.get('/dashboard', (req, res) => {
 
 // API to get students with pagination and QR code URL
 app.get('/api/students', async (req, res) => {
-  if (!req.dbConnected) {
-    return res.status(503).json({ 
-      error: 'Database service unavailable',
-      message: 'Student data temporarily unavailable'
-    });
-  }
-  
   const page = parseInt(req.query.page) || 1;
   const pageSize = 20;
   const offset = (page - 1) * pageSize;
+  
   try {
-    const result = await pool.query(
-      'SELECT * FROM students ORDER BY id LIMIT $1 OFFSET $2',
-      [pageSize, offset]
-    );
-    // Get total count for pagination
-    const countResult = await pool.query('SELECT COUNT(*) FROM students');
-    const total = parseInt(countResult.rows[0].count);
+    let result, total;
+    
+    if (req.dbConnected) {
+      result = await pool.query(
+        'SELECT * FROM students ORDER BY id LIMIT $1 OFFSET $2',
+        [pageSize, offset]
+      );
+      const countResult = await pool.query('SELECT COUNT(*) FROM students');
+      total = parseInt(countResult.rows[0].count);
+    } else {
+      const memResult = await memoryStorage.getStudents(pageSize, offset);
+      result = { rows: memResult.rows };
+      total = memResult.total;
+    }
+    
     const totalPages = Math.ceil(total / pageSize);
 
     // Add QR code image URL for each student
@@ -221,7 +249,8 @@ app.get('/api/students', async (req, res) => {
       total,
       page,
       pageSize,
-      totalPages
+      totalPages,
+      storage: req.dbConnected ? 'database' : 'memory'
     });
   } catch (err) {
     console.error('Error fetching students:', err);
@@ -238,16 +267,19 @@ app.post('/dashboard', async (req, res) => {
     return res.status(400).send('<h2>Username and password are required</h2><a href="/login.html">Try again</a>');
   }
 
-  if (!req.dbConnected) {
-    return res.status(503).send('<h2>Database service unavailable</h2><p>Please try again later</p><a href="/login.html">Back to login</a>');
-  }
-
   try {
-    // Get the user by username
-    const result = await pool.query(
-      'SELECT * FROM admins WHERE username = $1',
-      [username]
-    );
+    let result;
+    
+    if (req.dbConnected) {
+      // Get the user by username from database
+      result = await pool.query(
+        'SELECT * FROM admins WHERE username = $1',
+        [username]
+      );
+    } else {
+      // Get the user from memory storage
+      result = await memoryStorage.getAdmin(username);
+    }
     
     if (result.rows.length === 0) {
       console.log(`Login attempt failed for username: ${username} - user not found`);
@@ -263,11 +295,11 @@ app.post('/dashboard', async (req, res) => {
       // Bcrypt hashed password
       passwordMatches = await bcrypt.compare(password, user.password_hash);
     } else {
-      // Plain text password (for migration) - not recommended for production
+      // Plain text password (for migration/memory storage)
       passwordMatches = user.password_hash === password;
       
-      // If plain text password matches, hash it for future use
-      if (passwordMatches) {
+      // If using database and plain text password matches, hash it for future use
+      if (passwordMatches && req.dbConnected) {
         const hashedPassword = await bcrypt.hash(password, parseInt(process.env.BCRYPT_ROUNDS) || 10);
         await pool.query(
           'UPDATE admins SET password_hash = $1 WHERE id = $2',
@@ -278,10 +310,10 @@ app.post('/dashboard', async (req, res) => {
     }
 
     if (passwordMatches) {
-      console.log(`Successful login for user: ${username}`);
+      console.log(`✅ Successful login for user: ${username} (${req.dbConnected ? 'database' : 'memory'} storage)`);
       res.redirect('/students'); // Redirect to students registration page
     } else {
-      console.log(`Login attempt failed for username: ${username} - incorrect password`);
+      console.log(`❌ Login attempt failed for username: ${username} - incorrect password`);
       res.status(401).send('<h2>Invalid username or password</h2><a href="/login.html">Try again</a>');
     }
   } catch (err) {
