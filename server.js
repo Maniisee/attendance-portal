@@ -57,11 +57,44 @@ async function initializeDatabase() {
           id SERIAL PRIMARY KEY,
           student_id VARCHAR(50) UNIQUE NOT NULL,
           name VARCHAR(100) NOT NULL,
-          email VARCHAR(100) UNIQUE NOT NULL,
+          first_name VARCHAR(50),
+          last_name VARCHAR(50),
+          email VARCHAR(100),
           phone VARCHAR(20),
+          parent_mobile VARCHAR(20),
+          class VARCHAR(50),
+          division VARCHAR(10),
+          dob DATE,
+          gender VARCHAR(10),
+          address1 TEXT,
+          address2 TEXT,
+          city VARCHAR(50),
+          state VARCHAR(50),
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
       `);
+
+      // Add missing columns if they don't exist (for existing tables)
+      const addColumnIfNotExists = async (columnName, columnDef) => {
+        try {
+          await client.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS ${columnName} ${columnDef};`);
+        } catch (err) {
+          // Column might already exist, ignore error
+          console.log(`Column ${columnName} already exists or error adding:`, err.message);
+        }
+      };
+
+      await addColumnIfNotExists('first_name', 'VARCHAR(50)');
+      await addColumnIfNotExists('last_name', 'VARCHAR(50)');
+      await addColumnIfNotExists('parent_mobile', 'VARCHAR(20)');
+      await addColumnIfNotExists('class', 'VARCHAR(50)');
+      await addColumnIfNotExists('division', 'VARCHAR(10)');
+      await addColumnIfNotExists('dob', 'DATE');
+      await addColumnIfNotExists('gender', 'VARCHAR(10)');
+      await addColumnIfNotExists('address1', 'TEXT');
+      await addColumnIfNotExists('address2', 'TEXT');
+      await addColumnIfNotExists('city', 'VARCHAR(50)');
+      await addColumnIfNotExists('state', 'VARCHAR(50)');
       
       await client.query(`
         CREATE TABLE IF NOT EXISTS attendance (
@@ -265,6 +298,11 @@ app.get('/home', (req, res) => {
 
 app.get('/students', (req, res) => {
   res.sendFile(path.join(__dirname, 'students.html'));
+});
+
+// Test form for debugging registration
+app.get('/test-form', (req, res) => {
+  res.sendFile(path.join(__dirname, 'test-form.html'));
 });
 
 // Status page for monitoring database connection
