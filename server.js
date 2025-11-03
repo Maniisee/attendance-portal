@@ -9,7 +9,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 8080;
 
 // Load environment variables first
 require('dotenv').config();
@@ -29,24 +29,50 @@ if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN &&
 }
 
 const pool = new Pool({
-  user: process.env.DB_USER || 'postgres',
-  host: process.env.DB_HOST || 'localhost',
-  database: process.env.DB_NAME || 'attendance_portal',
-  password: process.env.DB_PASSWORD || '',
-  port: process.env.DB_PORT || 5432,
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
-// Test database connection
-pool.connect((err, client, release) => {
-  if (err) {
-    console.error('❌ Database connection failed:', err.message);
-    console.error('Please check your database configuration in .env file');
-    console.error('Make sure PostgreSQL is running and the database exists');
-  } else {
+// Test database connection and initialize tables
+async function initializeDatabase() {
+  try {
+    const client = await pool.connect();
     console.log('✅ Connected to PostgreSQL database successfully');
-    release();
+    
+    // Create tables if they don't exist
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS students (
+        id SERIAL PRIMARY KEY,
+        student_id VARCHAR(50) UNIQUE NOT NULL,
+        name VARCHAR(100) NOT NULL,
+        email VARCHAR(100) UNIQUE NOT NULL,
+        phone VARCHAR(20),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS attendance (
+        id SERIAL PRIMARY KEY,
+        student_id VARCHAR(50) NOT NULL,
+        date DATE NOT NULL,
+        time TIME NOT NULL,
+        status VARCHAR(20) DEFAULT 'present',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (student_id) REFERENCES students(student_id)
+      );
+    `);
+    
+    console.log('✅ Database tables initialized successfully');
+    client.release();
+  } catch (err) {
+    console.error('❌ Database connection failed:', err.message);
+    console.error('Please check your database configuration');
   }
-});
+}
+
+// Initialize database on startup
+initializeDatabase();
 
 // Security middleware
 if (process.env.NODE_ENV === 'production') {
