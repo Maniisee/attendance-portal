@@ -174,12 +174,80 @@ app.use((req, res, next) => {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
+  let stats = null;
+  if (!req.dbConnected && memoryStorage) {
+    stats = memoryStorage.getStats();
+  }
+  
   res.json({
     status: 'running',
     database: req.dbConnected ? 'connected' : 'disconnected',
     storage: req.dbConnected ? 'postgresql' : 'memory',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    memory_storage_ready: !!memoryStorage,
+    memory_stats: stats
   });
+});
+
+// Debug endpoint for memory storage
+app.get('/debug/memory', (req, res) => {
+  if (req.dbConnected) {
+    return res.json({ message: 'Using database storage, no memory data available' });
+  }
+  
+  if (!memoryStorage) {
+    return res.json({ message: 'Memory storage not initialized' });
+  }
+  
+  res.json({
+    initialized: true,
+    data: memoryStorage.getAllData(),
+    stats: memoryStorage.getStats()
+  });
+});
+
+// Test endpoint to add a sample student
+app.get('/test/add-sample-student', async (req, res) => {
+  if (req.dbConnected) {
+    return res.json({ message: 'Using database, test not applicable' });
+  }
+  
+  if (!memoryStorage) {
+    return res.json({ error: 'Memory storage not initialized' });
+  }
+  
+  try {
+    const sampleStudent = {
+      student_id: 'TEST001',
+      name: 'Test Student',
+      first_name: 'Test',
+      last_name: 'Student',
+      phone: '1234567890',
+      email: 'test@example.com',
+      parent_mobile: '0987654321',
+      class: '10',
+      division: 'A',
+      dob: '2005-01-01',
+      gender: 'Male',
+      address1: '123 Test St',
+      city: 'Test City',
+      state: 'Test State'
+    };
+    
+    const result = await memoryStorage.addStudent(sampleStudent);
+    const stats = memoryStorage.getStats();
+    
+    res.json({
+      success: true,
+      student_added: result.rows[0],
+      stats: stats
+    });
+  } catch (error) {
+    res.json({
+      error: error.message,
+      details: error
+    });
+  }
 });
 
 // Root route - serve login page
@@ -328,6 +396,15 @@ app.post('/add-student', async (req, res) => {
   console.log('Content-Type:', req.headers['content-type']);
   console.log('Request body:', req.body);
   console.log('📊 Storage type:', req.dbConnected ? 'database' : 'memory');
+  console.log('🔍 Memory storage initialized:', !!memoryStorage);
+  
+  if (!req.dbConnected && !memoryStorage) {
+    console.error('❌ Neither database nor memory storage available!');
+    return res.status(500).json({ 
+      error: 'Storage not available',
+      message: 'Neither database nor memory storage is ready'
+    });
+  }
   
   const {
     studentId,
