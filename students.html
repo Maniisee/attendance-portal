@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Students Registration</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    margin: 0;
+    padding: 0;
+    display: flex;
+    min-height: 100vh;
+  }
+  
+  .sidebar {
+    width: 280px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-right: 1px solid rgba(255, 255, 255, 0.2);
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0;
+    min-height: 100vh;
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1);
+  }
+  
+  .sidebar-header {
+    width: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 30px 24px;
+    text-align: center;
+  }
+  
+  .sidebar h2 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    margin-bottom: 8px;
+  }
+  
+  .sidebar-subtitle {
+    font-size: 0.9rem;
+    opacity: 0.9;
+    font-weight: 400;
+  }
+  
+  .nav-links {
+    width: 100%;
+    padding: 20px 0;
+  }
+  
+  .nav-link {
+    width: 100%;
+    padding: 16px 24px;
+    color: #4a5568;
+    text-decoration: none;
+    font-size: 1rem;
+    font-weight: 500;
+    border: none;
+    background: none;
+    text-align: left;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    outline: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  
+  .nav-link i {
+    width: 18px;
+    text-align: center;
+  }
+  
+  .nav-link:hover {
+    background: linear-gradient(90deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+    color: #667eea;
+    transform: translateX(4px);
+  }
+  
+  .nav-link.active {
+    background: linear-gradient(90deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+    color: #667eea;
+    border-right: 3px solid #667eea;
+    font-weight: 600;
+  }
+  
+  .main-content {
+    flex: 1;
+    padding: 40px;
+    background: rgba(255, 255, 255, 0.1);
+    min-width: 0;
+    overflow-y: auto;
+  }
+  
+  .page-header {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    padding: 30px;
+    margin-bottom: 30px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  
+  .page-header h1 {
+    color: #2d3748;
+    font-size: 2.2rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    letter-spacing: -0.5px;
+  }
+  
+  .page-header p {
+    color: #718096;
+    font-size: 1.1rem;
+    font-weight: 400;
+  }
+  
+  .form-box {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 24px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 40px;
+    margin-bottom: 30px;
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  .form-section-title {
+    color: #2d3748;
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 24px;
+    width: 100%;
+  }
+  
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  
+  .form-group.full-width {
+    grid-column: 1 / -1;
+  }
+  
+  .form-group.half-width {
+    grid-column: span 1;
+  }
+  
+  .form-group label {
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #4a5568;
+    font-size: 0.95rem;
+    letter-spacing: 0.2px;
+  }
+  
+  .required::after {
+    content: " *";
+    color: #e53e3e;
+  }
+  
+  .form-group input, 
+  .form-group select {
+    width: 100%;
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 2px solid #e2e8f0;
+    font-size: 1rem;
+    font-weight: 400;
+    background: white;
+    transition: all 0.3s ease;
+    outline: none;
+  }
+  
+  .form-group input:focus, 
+  .form-group select:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    transform: translateY(-1px);
+  }
+  
+  .form-group input:disabled {
+    background: #f7fafc;
+    color: #a0aec0;
+    cursor: not-allowed;
+  }
+  
+  .date-input-wrapper {
+    position: relative;
+  }
+  
+  .date-input-wrapper input[type="date"] {
+    padding-right: 50px;
+  }
+  
+  .date-icon {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #a0aec0;
+    font-size: 1.1rem;
+    pointer-events: none;
+  }
+  
+  .student-id-wrapper {
+    position: relative;
+  }
+  
+  .auto-generate-badge {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  
+  .form-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 40px;
+    padding-top: 30px;
+    border-top: 1px solid #e2e8f0;
+  }
+  
+  .btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 16px 40px;
+    font-weight: 600;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+  }
+  
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+  }
+  
+  .btn-primary:active {
+    transform: translateY(0);
+  }
+  
+  .students-list {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 24px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 40px;
+    overflow: hidden;
+  }
+  
+  .students-list h2 {
+    color: #2d3748;
+    font-size: 1.6rem;
+    font-weight: 600;
+    margin-bottom: 30px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  
+  .table-wrapper {
+    overflow-x: auto;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+  }
+  
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+  }
+  
+  th, td {
+    padding: 16px 20px;
+    text-align: left;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  
+  th {
+    background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+    color: #4a5568;
+    font-weight: 600;
+    font-size: 0.9rem;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  
+  td {
+    color: #2d3748;
+    font-weight: 400;
+  }
+  
+  tr:hover {
+    background: rgba(102, 126, 234, 0.02);
+  }
+  
+  .qr-img {
+    width: 60px;
+    height: 60px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+  
+  .qr-img:hover {
+    transform: scale(1.1);
+  }
+  
+  .form-result {
+    margin-top: 20px;
+    padding: 16px;
+    border-radius: 12px;
+    font-weight: 500;
+    text-align: center;
+    display: none;
+  }
+  
+  .form-result.success {
+    background: rgba(72, 187, 120, 0.1);
+    color: #2f855a;
+    border: 1px solid rgba(72, 187, 120, 0.2);
+    display: block;
+  }
+  
+  .form-result.error {
+    background: rgba(245, 101, 101, 0.1);
+    color: #c53030;
+    border: 1px solid rgba(245, 101, 101, 0.2);
+    display: block;
+  }
+  
+  @media (max-width: 1024px) {
+    .form-grid {
+      grid-template-columns: 1fr;
+    }
+    
+    .sidebar {
+      width: 260px;
+    }
+    
+    .main-content {
+      padding: 20px;
+    }
+  }
+  
+  @media (max-width: 768px) {
+    body {
+      flex-direction: column;
+    }
+    
+    .sidebar {
+      width: 100%;
+      min-height: auto;
+      flex-direction: row;
+      overflow-x: auto;
+    }
+    
+    .sidebar-header {
+      padding: 20px;
+      min-width: 200px;
+    }
+    
+    .nav-links {
+      display: flex;
+      padding: 10px 0;
+      min-width: max-content;
+    }
+    
+    .nav-link {
+      white-space: nowrap;
+      padding: 12px 20px;
+    }
+    
+    .main-content {
+      padding: 20px 16px;
+    }
+    
+    .form-box, .students-list {
+      padding: 24px 20px;
+    }
+    
+    .page-header {
+      padding: 24px 20px;
+    }
+    
+    .page-header h1 {
+      font-size: 1.8rem;
+    }
+  }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>Portal</h2>
+      <div class="sidebar-subtitle">Student Management</div>
+    </div>
+    <div class="nav-links">
+      <a class="nav-link active" href="/students">
+        <i class="fas fa-user-graduate"></i>
+        Students Registration
+      </a>
+      <a class="nav-link" href="/scan.html">
+        <i class="fas fa-qrcode"></i>
+        Scan Attendance
+      </a>
+      <a class="nav-link" href="/attendance.html">
+        <i class="fas fa-chart-line"></i>
+        Attendance Records
+      </a>
+    </div>
+  </div>
+  
+  <div class="main-content">
+    <div class="page-header">
+      <h1>Student Registration</h1>
+      <p>Register new students and manage their information</p>
+    </div>
+    
+    <div class="form-box">
+      <div class="form-section-title">
+        <i class="fas fa-user-plus"></i>
+        Register New Student
+      </div>
+      
+      <form id="student-form">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="required">Student ID</label>
+            <div class="student-id-wrapper">
+              <input type="text" name="studentId" placeholder="Will be auto-generated" disabled />
+              <div class="auto-generate-badge">AUTO</div>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label class="required">First Name</label>
+            <input type="text" name="firstName" placeholder="Enter first name" required />
+          </div>
+          
+          <div class="form-group">
+            <label class="required">Last Name</label>
+            <input type="text" name="lastName" placeholder="Enter last name" required />
+          </div>
+          
+          <div class="form-group">
+            <label>Date of Birth</label>
+            <div class="date-input-wrapper">
+              <input type="date" name="dob" />
+              <i class="fas fa-calendar-alt date-icon"></i>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label>Gender</label>
+            <select name="gender">
+              <option value="">Select Gender</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label class="required">Class</label>
+            <input type="text" name="class" placeholder="e.g., 10th, MCA" required />
+          </div>
+          
+          <div class="form-group">
+            <label class="required">Division</label>
+            <input type="text" name="division" placeholder="e.g., A, B, C" required />
+          </div>
+          
+          <div class="form-group">
+            <label class="required">Parent Mobile</label>
+            <input type="tel" name="parent_mobile" placeholder="+91 9876543210" required />
+          </div>
+          
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" name="email" placeholder="student@example.com" />
+          </div>
+          
+          <div class="form-group">
+            <label>City</label>
+            <input type="text" name="city" placeholder="Enter city" />
+          </div>
+          
+          <div class="form-group">
+            <label>State</label>
+            <input type="text" name="state" placeholder="Enter state" />
+          </div>
+          
+          <div class="form-group full-width">
+            <label>Address Line 1</label>
+            <input type="text" name="address1" placeholder="Enter primary address" />
+          </div>
+          
+          <div class="form-group full-width">
+            <label>Address Line 2</label>
+            <input type="text" name="address2" placeholder="Enter secondary address (optional)" />
+          </div>
+        </div>
+        
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">
+            <i class="fas fa-plus"></i>
+            Register Student
+          </button>
+        </div>
+      </form>
+      
+      <div id="form-result" class="form-result"></div>
+    </div>
+    
+    <div class="students-list">
+      <h2>
+        <i class="fas fa-users"></i>
+        Registered Students
+      </h2>
+      <div class="table-wrapper">
+        <table id="students-table">
+          <thead>
+            <tr>
+              <th>Student ID</th>
+              <th>Name</th>
+              <th>Class</th>
+              <th>Division</th>
+              <th>Parent Mobile</th>
+              <th>QR Code</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Auto-generate student ID and keep it frozen
+    window.addEventListener('load', async function() {
+      try {
+        const res = await fetch('/api/students');
+        const data = await res.json();
+        const count = data.total || 0;
+        const newId = `STU${(count + 1).toString().padStart(4, '0')}`;
+        document.querySelector('input[name="studentId"]').value = newId;
+      } catch (error) {
+        console.error('Error generating student ID:', error);
+        document.querySelector('input[name="studentId"]').value = 'STU0001';
+      }
+    });
+
+    // Handle student registration form
+    document.getElementById('student-form').onsubmit = async function(e) {
+      e.preventDefault();
+      
+      const submitBtn = document.querySelector('.btn-primary');
+      const resultDiv = document.getElementById('form-result');
+      
+      // Show loading state
+      submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registering...';
+      submitBtn.disabled = true;
+      
+      const form = e.target;
+      const data = {};
+      for (let el of form.elements) {
+        if (el.name) {
+          data[el.name] = el.value;
+        }
+      }
+      
+      // Client-side validation
+      if (!data.firstName || !data.lastName || !data.class || !data.division || !data.parent_mobile) {
+        resultDiv.textContent = 'Please fill in all required fields';
+        resultDiv.className = 'form-result error';
+        submitBtn.innerHTML = '<i class="fas fa-plus"></i> Register Student';
+        submitBtn.disabled = false;
+        return;
+      }
+      
+      try {
+        const res = await fetch('/add-student', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        
+        if (res.ok) {
+          resultDiv.textContent = 'Student registered successfully!';
+          resultDiv.className = 'form-result success';
+          form.reset();
+          
+          // Generate new student ID for next registration
+          const studentsRes = await fetch('/api/students');
+          const studentsData = await studentsRes.json();
+          const newCount = studentsData.total || 0;
+          const nextId = `STU${(newCount + 1).toString().padStart(4, '0')}`;
+          document.querySelector('input[name="studentId"]').value = nextId;
+          
+          loadStudents();
+          
+          // Hide success message after 3 seconds
+          setTimeout(() => {
+            resultDiv.style.display = 'none';
+          }, 3000);
+        } else {
+          let errorMessage = 'Failed to register student';
+          try {
+            const errorData = await res.json();
+            errorMessage = errorData.error || errorMessage;
+          } catch {
+            errorMessage = await res.text() || errorMessage;
+          }
+          resultDiv.textContent = errorMessage;
+          resultDiv.className = 'form-result error';
+        }
+      } catch (error) {
+        resultDiv.textContent = 'Network error: ' + error.message;
+        resultDiv.className = 'form-result error';
+      } finally {
+        submitBtn.innerHTML = '<i class="fas fa-plus"></i> Register Student';
+        submitBtn.disabled = false;
+      }
+    };
+
+    // Load students list
+    async function loadStudents() {
+      try {
+        const res = await fetch('/api/students');
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        const data = await res.json();
+        const tbody = document.querySelector('#students-table tbody');
+        tbody.innerHTML = '';
+        
+        if (data.students && data.students.length > 0) {
+          data.students.forEach(s => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td><strong>${s.student_id}</strong></td>
+              <td>${s.name || ''}</td>
+              <td><span style="background: #e2e8f0; padding: 4px 8px; border-radius: 6px; font-size: 0.85rem;">${s.class || 'N/A'}</span></td>
+              <td><span style="background: #e2e8f0; padding: 4px 8px; border-radius: 6px; font-size: 0.85rem;">${s.division || 'N/A'}</span></td>
+              <td>${s.parent_mobile || s.phone || ''}</td>
+              <td><img class="qr-img" src="${s.qr_img_url}" alt="QR Code" title="Click to enlarge"></td>
+            `;
+            tbody.appendChild(tr);
+          });
+        } else {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #a0aec0; padding: 40px;">No students registered yet</td></tr>';
+        }
+      } catch (error) {
+        console.error('Error loading students:', error);
+        document.querySelector('#students-table tbody').innerHTML = '<tr><td colspan="6" style="text-align: center; color: #e53e3e; padding: 40px;">Error loading students</td></tr>';
+      }
+    }
+    
+    loadStudents();
+  </script>
+</body>
+</html>
