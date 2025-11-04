@@ -104,17 +104,64 @@ async function initializeDatabase() {
         }
       };
 
-      await addColumnIfNotExists('first_name', 'VARCHAR(50)');
-      await addColumnIfNotExists('last_name', 'VARCHAR(50)');
-      await addColumnIfNotExists('parent_mobile', 'VARCHAR(20)');
-      await addColumnIfNotExists('class', 'VARCHAR(50)');
-      await addColumnIfNotExists('division', 'VARCHAR(10)');
-      await addColumnIfNotExists('dob', 'DATE');
-      await addColumnIfNotExists('gender', 'VARCHAR(10)');
-      await addColumnIfNotExists('address1', 'TEXT');
-      await addColumnIfNotExists('address2', 'TEXT');
-      await addColumnIfNotExists('city', 'VARCHAR(50)');
-      await addColumnIfNotExists('state', 'VARCHAR(50)');
+      // Check if we need to add missing columns
+      const tableInfo = await client.query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'students' AND table_schema = 'public'
+      `);
+      
+      const existingColumns = tableInfo.rows.map(row => row.column_name);
+      console.log('Existing columns:', existingColumns);
+      
+      // If we're missing key columns, recreate the table
+      const requiredColumns = ['first_name', 'last_name', 'parent_mobile', 'class', 'division'];
+      const missingColumns = requiredColumns.filter(col => !existingColumns.includes(col));
+      
+      if (missingColumns.length > 0) {
+        console.log('🔄 Missing columns detected, recreating table with full schema...');
+        
+        // Drop and recreate with full schema
+        await client.query('DROP TABLE IF EXISTS students CASCADE;');
+        await client.query('DROP TABLE IF EXISTS attendance CASCADE;');
+        
+        await client.query(`
+          CREATE TABLE students (
+            id SERIAL PRIMARY KEY,
+            student_id VARCHAR(50) UNIQUE NOT NULL,
+            name VARCHAR(100) NOT NULL,
+            first_name VARCHAR(50),
+            last_name VARCHAR(50),
+            email VARCHAR(100),
+            phone VARCHAR(20),
+            parent_mobile VARCHAR(20),
+            class VARCHAR(50),
+            division VARCHAR(10),
+            dob DATE,
+            gender VARCHAR(10),
+            address1 TEXT,
+            address2 TEXT,
+            city VARCHAR(50),
+            state VARCHAR(50),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+        `);
+        
+        console.log('✅ Students table recreated with full schema');
+      } else {
+        // Just add any missing columns
+        await addColumnIfNotExists('first_name', 'VARCHAR(50)');
+        await addColumnIfNotExists('last_name', 'VARCHAR(50)');
+        await addColumnIfNotExists('parent_mobile', 'VARCHAR(20)');
+        await addColumnIfNotExists('class', 'VARCHAR(50)');
+        await addColumnIfNotExists('division', 'VARCHAR(10)');
+        await addColumnIfNotExists('dob', 'DATE');
+        await addColumnIfNotExists('gender', 'VARCHAR(10)');
+        await addColumnIfNotExists('address1', 'TEXT');
+        await addColumnIfNotExists('address2', 'TEXT');
+        await addColumnIfNotExists('city', 'VARCHAR(50)');
+        await addColumnIfNotExists('state', 'VARCHAR(50)');
+      }
       
       await client.query(`
         CREATE TABLE IF NOT EXISTS attendance (
