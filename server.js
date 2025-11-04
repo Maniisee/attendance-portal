@@ -34,7 +34,15 @@ if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN &&
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  ssl: process.env.NODE_ENV === 'production' ? { 
+    rejectUnauthorized: false,
+    sslmode: 'require'
+  } : false,
+  // Add connection timeout and retry settings
+  connectionTimeoutMillis: 10000,
+  idleTimeoutMillis: 30000,
+  max: 10,
+  min: 2
 });
 
 // Test database connection and initialize tables
@@ -43,13 +51,25 @@ let memoryStorage = null;
 
 async function initializeDatabase() {
   let retryCount = 0;
-  const maxRetries = 3;
+  const maxRetries = 5; // Increased retries
   
   while (retryCount < maxRetries && !dbConnected) {
     try {
       console.log(`🔄 Attempting database connection (${retryCount + 1}/${maxRetries})...`);
-      const client = await pool.connect();
+      
+      // Test connection with timeout
+      const client = await Promise.race([
+        pool.connect(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Connection timeout')), 15000)
+        )
+      ]);
+      
       console.log('✅ Connected to PostgreSQL database successfully');
+      
+      // Test a simple query
+      await client.query('SELECT NOW()');
+      console.log('✅ Database query test successful');
       
       // Create tables if they don't exist
       await client.query(`
