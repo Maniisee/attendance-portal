@@ -310,6 +310,16 @@ app.get('/debug-form', (req, res) => {
   res.sendFile(path.join(__dirname, 'debug-form.html'));
 });
 
+// Simple, bulletproof registration form
+app.get('/simple-registration', (req, res) => {
+  res.sendFile(path.join(__dirname, 'simple-registration.html'));
+});
+
+// Redirect root to simple registration for testing
+app.get('/', (req, res) => {
+  res.redirect('/simple-registration');
+});
+
 // Status page for monitoring database connection
 app.get('/status', (req, res) => {
   res.sendFile(path.join(__dirname, 'status.html'));
