@@ -330,6 +330,67 @@ app.get('/debug-form', (req, res) => {
   res.sendFile(path.join(__dirname, 'debug-form.html'));
 });
 
+// Database reset endpoint for fixing schema issues
+app.get('/admin/reset-database', async (req, res) => {
+  if (!dbConnected) {
+    return res.status(500).json({ error: 'Database not connected' });
+  }
+  
+  try {
+    const client = await pool.connect();
+    
+    // Drop and recreate students table with all columns
+    await client.query('DROP TABLE IF EXISTS students CASCADE;');
+    await client.query('DROP TABLE IF EXISTS attendance CASCADE;');
+    
+    // Create students table with full schema
+    await client.query(`
+      CREATE TABLE students (
+        id SERIAL PRIMARY KEY,
+        student_id VARCHAR(50) UNIQUE NOT NULL,
+        name VARCHAR(100) NOT NULL,
+        first_name VARCHAR(50),
+        last_name VARCHAR(50),
+        email VARCHAR(100),
+        phone VARCHAR(20),
+        parent_mobile VARCHAR(20),
+        class VARCHAR(50),
+        division VARCHAR(10),
+        dob DATE,
+        gender VARCHAR(10),
+        address1 TEXT,
+        address2 TEXT,
+        city VARCHAR(50),
+        state VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    
+    // Create attendance table
+    await client.query(`
+      CREATE TABLE attendance (
+        id SERIAL PRIMARY KEY,
+        student_id VARCHAR(50) NOT NULL,
+        date DATE NOT NULL,
+        time TIME NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (student_id) REFERENCES students(student_id)
+      );
+    `);
+    
+    client.release();
+    
+    res.json({ 
+      success: true, 
+      message: 'Database schema recreated successfully with all columns' 
+    });
+    
+  } catch (error) {
+    console.error('Database reset error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Simple, bulletproof registration form
 app.get('/simple-registration', (req, res) => {
   res.sendFile(path.join(__dirname, 'simple-registration.html'));
