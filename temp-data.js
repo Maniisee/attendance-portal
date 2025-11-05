@@ -1,117 +1,146 @@
 // Temporary in-memory storage for testing
-const students = new Map([
-    ['MCA001', { 
-        student_id: 'MCA001', 
+const students = [
+    { 
+        studentId: 'MCA001', 
         password: 'password123', 
         name: 'John Doe',
-        first_name: 'John',
-        last_name: 'Doe',
+        firstName: 'John',
+        lastName: 'Doe',
         email: 'john.doe@college.edu',
-        phone: '9876543210',
-        parent_mobile: '9876543211',
+        phoneNumber: '9876543210',
+        parentContact: '9876543211',
         class: 'MCA',
         division: 'A',
-        dob: '2000-01-15',
+        dateOfBirth: '2000-01-15',
         gender: 'Male',
-        address1: '123 Main Street',
-        address2: 'Apartment 4B',
+        address: '123 Main St, Mumbai',
         city: 'Mumbai',
         state: 'Maharashtra',
-        created_at: new Date('2025-01-01'),
-        qr_code_path: '/qrcodes/MCA001.png'
-    }],
-    ['MCA002', { 
-        student_id: 'MCA002', 
+        joinDate: '2024-08-15'
+    },
+    { 
+        studentId: 'MCA002', 
         password: 'password123', 
         name: 'Jane Smith',
-        first_name: 'Jane',
-        last_name: 'Smith',
+        firstName: 'Jane',
+        lastName: 'Smith',
         email: 'jane.smith@college.edu',
-        phone: '9876543212',
-        parent_mobile: '9876543213',
+        phoneNumber: '9876543220',
+        parentContact: '9876543221',
         class: 'MCA',
         division: 'A',
-        dob: '2000-02-20',
+        dateOfBirth: '2000-02-20',
         gender: 'Female',
-        address1: '456 Oak Avenue',
-        address2: '',
-        city: 'Pune',
-        state: 'Maharashtra',
-        created_at: new Date('2025-01-02'),
-        qr_code_path: '/qrcodes/MCA002.png'
-    }],
-    ['MCA003', { 
-        student_id: 'MCA003', 
+        address: '456 Oak Ave, Delhi',
+        city: 'Delhi',
+        state: 'Delhi',
+        joinDate: '2024-08-15'
+    },
+    { 
+        studentId: 'MCA003', 
         password: 'password123', 
         name: 'Mike Johnson',
-        first_name: 'Mike',
-        last_name: 'Johnson',
+        firstName: 'Mike',
+        lastName: 'Johnson',
         email: 'mike.johnson@college.edu',
-        phone: '9876543214',
-        parent_mobile: '9876543215',
+        phoneNumber: '9876543230',
+        parentContact: '9876543231',
         class: 'MCA',
         division: 'B',
-        dob: '1999-12-10',
+        dateOfBirth: '1999-12-10',
         gender: 'Male',
-        address1: '789 Pine Road',
-        address2: 'Building C',
+        address: '789 Pine Rd, Bangalore',
         city: 'Bangalore',
         state: 'Karnataka',
-        created_at: new Date('2025-01-03'),
-        qr_code_path: '/qrcodes/MCA003.png'
-    }],
-    ['MCA004', { 
-        student_id: 'MCA004', 
-        password: 'password123', 
-        name: 'Sarah Wilson',
-        first_name: 'Sarah',
-        last_name: 'Wilson',
-        email: 'sarah.wilson@college.edu',
-        phone: '9876543216',
-        parent_mobile: '9876543217',
-        class: 'MCA',
-        division: 'B',
-        dob: '2000-05-30',
-        gender: 'Female',
-        address1: '321 Elm Street',
-        address2: 'Floor 2',
-        city: 'Chennai',
-        state: 'Tamil Nadu',
-        created_at: new Date('2025-01-04'),
-        qr_code_path: '/qrcodes/MCA004.png'
-    }],
-    ['MCA005', { 
-        student_id: 'MCA005', 
-        password: 'password123', 
-        name: 'David Brown',
-        first_name: 'David',
-        last_name: 'Brown',
-        email: 'david.brown@college.edu',
-        phone: '9876543218',
-        parent_mobile: '9876543219',
-        class: 'MCA',
-        division: 'A',
-        dob: '2000-08-25',
-        gender: 'Male',
-        address1: '654 Maple Drive',
-        address2: '',
-        city: 'Hyderabad',
-        state: 'Telangana',
-        created_at: new Date('2025-01-05'),
-        qr_code_path: '/qrcodes/MCA005.png'
-    }]
-]);
-
-// Sample attendance data
-const attendanceRecords = [
-    { id: 1, student_id: 'MCA001', date: '2025-11-05', time: '09:00:00', status: 'present' },
-    { id: 2, student_id: 'MCA002', date: '2025-11-05', time: '09:05:00', status: 'present' },
-    { id: 3, student_id: 'MCA003', date: '2025-11-05', time: '09:10:00', status: 'present' },
-    { id: 4, student_id: 'MCA004', date: '2025-11-04', time: '09:15:00', status: 'present' },
-    { id: 5, student_id: 'MCA005', date: '2025-11-04', time: '09:20:00', status: 'present' },
-    { id: 6, student_id: 'MCA001', date: '2025-11-04', time: '09:00:00', status: 'present' },
-    { id: 7, student_id: 'MCA002', date: '2025-11-03', time: '09:05:00', status: 'present' },
-    { id: 8, student_id: 'MCA003', date: '2025-11-03', time: '09:10:00', status: 'present' }
+        joinDate: '2024-08-15'
+    }
 ];
 
-module.exports = { students, attendanceRecords };
+// Sample attendance records
+const attendanceRecords = [
+    {
+        id: 1,
+        studentId: 'MCA001',
+        name: 'John Doe',
+        firstName: 'John',
+        lastName: 'Doe',
+        date: '2024-11-05',
+        timestamp: '2024-11-05T09:00:00.000Z',
+        status: 'present'
+    },
+    {
+        id: 2,
+        studentId: 'MCA002',
+        name: 'Jane Smith',
+        firstName: 'Jane',
+        lastName: 'Smith',
+        date: '2024-11-05',
+        timestamp: '2024-11-05T09:15:00.000Z',
+        status: 'present'
+    },
+    {
+        id: 3,
+        studentId: 'MCA001',
+        name: 'John Doe',
+        firstName: 'John',
+        lastName: 'Doe',
+        date: '2024-11-04',
+        timestamp: '2024-11-04T09:00:00.000Z',
+        status: 'present'
+    },
+    {
+        id: 4,
+        studentId: 'MCA003',
+        name: 'Mike Johnson',
+        firstName: 'Mike',
+        lastName: 'Johnson',
+        date: '2024-11-04',
+        timestamp: '2024-11-04T09:30:00.000Z',
+        status: 'present'
+    },
+    {
+        id: 5,
+        studentId: 'MCA002',
+        name: 'Jane Smith',
+        firstName: 'Jane',
+        lastName: 'Smith',
+        date: '2024-11-03',
+        timestamp: '2024-11-03T09:10:00.000Z',
+        status: 'present'
+    },
+    {
+        id: 6,
+        studentId: 'MCA001',
+        name: 'John Doe',
+        firstName: 'John',
+        lastName: 'Doe',
+        date: '2024-11-03',
+        timestamp: '2024-11-03T09:05:00.000Z',
+        status: 'present'
+    },
+    {
+        id: 7,
+        studentId: 'MCA003',
+        name: 'Mike Johnson',
+        firstName: 'Mike',
+        lastName: 'Johnson',
+        date: '2024-11-03',
+        timestamp: '2024-11-03T09:25:00.000Z',
+        status: 'present'
+    },
+    {
+        id: 8,
+        studentId: 'MCA002',
+        name: 'Jane Smith',
+        firstName: 'Jane',
+        lastName: 'Smith',
+        date: '2024-11-02',
+        timestamp: '2024-11-02T09:20:00.000Z',
+        status: 'present'
+    }
+];
+
+module.exports = {
+    students,
+    attendanceRecords
+};
