@@ -29,8 +29,8 @@ if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN &&
   console.log('⚠️  Twilio credentials not configured - SMS notifications disabled');
 }
 
-console.log('🚀 Server starting with temporary data storage');
-console.log('� Total students loaded:', students.length);
+console.log('🚀 Server starting with temporary data storage - FIXED VERSION 2.0');
+console.log('📊 Total students loaded:', students.length);
 console.log('📝 Total attendance records loaded:', attendanceRecords.length);
 // Security middleware
 if (process.env.NODE_ENV === 'production') {
