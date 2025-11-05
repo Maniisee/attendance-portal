@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Login - Attendance Portal</title>
+  <title>Admin Login - Attendance Portal</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <style>
@@ -24,6 +24,7 @@
       overflow: hidden;
     }
     
+    /* Animated background elements */
     .bg-shapes {
       position: absolute;
       top: 0;
@@ -210,29 +211,21 @@
       opacity: 0.8;
     }
     
-    .credentials-info {
-      background: rgba(72, 187, 120, 0.1);
-      border: 1px solid rgba(72, 187, 120, 0.2);
-      border-radius: 10px;
-      padding: 16px;
-      margin-top: 24px;
-      text-align: left;
+    .forgot-password {
+      margin-top: 20px;
+      text-align: center;
     }
     
-    .credentials-info .info-title {
-      font-weight: 600;
-      color: #2f855a;
+    .forgot-password a {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 500;
       font-size: 0.9rem;
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
+      transition: color 0.2s ease;
     }
     
-    .credentials-info .info-text {
-      font-size: 0.85rem;
-      color: #2f855a;
-      line-height: 1.5;
+    .forgot-password a:hover {
+      color: #764ba2;
     }
     
     .footer {
@@ -249,6 +242,61 @@
       margin: 0 4px;
     }
     
+    .security-note {
+      background: rgba(102, 126, 234, 0.1);
+      border: 1px solid rgba(102, 126, 234, 0.2);
+      border-radius: 10px;
+      padding: 16px;
+      margin-top: 24px;
+      text-align: left;
+    }
+    
+    .security-note .security-title {
+      font-weight: 600;
+      color: #4a5568;
+      font-size: 0.9rem;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .security-note .security-text {
+      font-size: 0.85rem;
+      color: #718096;
+      line-height: 1.5;
+    }
+    
+    @media (max-width: 600px) {
+      .login-container {
+        padding: 40px 24px;
+        margin: 20px;
+        border-radius: 20px;
+      }
+      
+      h1 {
+        font-size: 1.8rem;
+      }
+      
+      .logo-icon {
+        width: 70px;
+        height: 70px;
+      }
+      
+      .logo-icon i {
+        font-size: 2rem;
+      }
+      
+      input {
+        padding: 14px 14px 14px 45px;
+      }
+      
+      .login-btn {
+        padding: 16px;
+      }
+    }
+    
+    /* Error message styling */
     .error-message {
       background: rgba(245, 101, 101, 0.1);
       border: 1px solid rgba(245, 101, 101, 0.2);
@@ -293,13 +341,12 @@
     <div id="error-message" class="error-message"></div>
     <div id="success-message" class="success-message"></div>
     
-    <!-- Traditional form with action and method -->
-    <form id="login-form" action="/dashboard" method="POST">
+    <form id="login-form" onsubmit="handleLogin(event)">
       <div class="form-group">
-        <label for="username">Username / Student ID</label>
+        <label for="username">Username</label>
         <div class="input-wrapper">
           <i class="fas fa-user input-icon"></i>
-          <input type="text" id="username" name="username" placeholder="Enter your username or student ID" required />
+          <input type="text" id="username" name="username" placeholder="Enter your username" required />
         </div>
       </div>
       
@@ -317,14 +364,17 @@
       </button>
     </form>
     
-    <div class="credentials-info">
-      <div class="info-title">
-        <i class="fas fa-info-circle"></i>
-        Test Credentials
+    <div class="forgot-password">
+      <a href="#" onclick="showInfo()">Need help accessing your account?</a>
+    </div>
+    
+    <div class="security-note">
+      <div class="security-title">
+        <i class="fas fa-shield-alt"></i>
+        Security Notice
       </div>
-      <div class="info-text">
-        <strong>Students:</strong> MCA001 to MCA005 (password: password123)<br>
-        <strong>Admin:</strong> admin (password: admin123)
+      <div class="security-text">
+        This is a secure admin portal. All login attempts are monitored and logged for security purposes.
       </div>
     </div>
     
@@ -335,93 +385,140 @@
   </div>
 
   <script>
-    // Enhanced login handler with fallbacks
-    document.getElementById('login-form').addEventListener('submit', function(e) {
-      e.preventDefault(); // Prevent default form submission initially
+    // Handle login form submission
+    async function handleLogin(event) {
+      console.log('🔐 Login form submitted');
+      event.preventDefault();
       
-      const username = document.getElementById('username').value.trim();
-      const password = document.getElementById('password').value.trim();
       const loginBtn = document.getElementById('login-btn');
       const errorMsg = document.getElementById('error-message');
-      const successMsg = document.getElementById('success-message');
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
       
-      // Hide messages
-      errorMsg.style.display = 'none';
-      successMsg.style.display = 'none';
+      console.log('📋 Login attempt:', { username, password: '***' });
       
       // Validate inputs
       if (!username || !password) {
+        console.log('❌ Validation failed: missing credentials');
         errorMsg.textContent = 'Please enter both username and password';
         errorMsg.style.display = 'block';
         return;
       }
       
-      // Show loading
+      // Hide any previous error messages
+      errorMsg.style.display = 'none';
+      
+      // Add loading state
+      console.log('⏳ Setting loading state...');
+      loginBtn.classList.add('loading');
       loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Signing In...';
       loginBtn.disabled = true;
       
-      // Try AJAX first
-      fetch('/dashboard', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: 'username=' + encodeURIComponent(username) + '&password=' + encodeURIComponent(password)
-      })
-      .then(function(response) {
-        if (response.ok) {
-          return response.text();
-        }
-        throw new Error('Login failed: ' + response.status);
-      })
-      .then(function(responseText) {
-        try {
-          const result = JSON.parse(responseText);
-          if (result.success) {
-            successMsg.textContent = 'Login successful! Redirecting...';
-            successMsg.style.display = 'block';
-            
-            // Force redirect with both window.location methods
-            setTimeout(function() {
-              window.location.replace('/home.html');
-            }, 500);
-            
-            // Backup redirect method
-            setTimeout(function() {
-              window.location.href = '/home.html';
-            }, 1000);
-            
-            return;
-          }
-          throw new Error(result.error || 'Login failed');
-        } catch (parseError) {
-          // If response is not JSON, just redirect
-          window.location.href = '/home.html';
-        }
-      })
-      .catch(function(error) {
-        console.error('AJAX failed, trying form submission:', error);
+      try {
+        console.log('📡 Sending login request...');
+        // Send login request
+        const response = await fetch('/dashboard', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+        });
         
-        // If AJAX fails, fall back to traditional form submission
-        const form = document.getElementById('login-form');
-        form.removeEventListener('submit', arguments.callee);
-        form.submit();
-      })
-      .finally(function() {
-        // Reset button after delay
-        setTimeout(function() {
-          loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
-          loginBtn.disabled = false;
-        }, 2000);
-      });
-    });
+        console.log('📊 Response received:', {
+          status: response.status,
+          ok: response.ok,
+          contentType: response.headers.get('content-type')
+        });
+        
+        if (response.ok) {
+          // Check if we got JSON response
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const result = await response.json();
+            if (result.success && result.redirect) {
+              // Simple navigation - just use the redirect path
+              console.log('✅ Login successful, redirecting to:', result.redirect);
+              window.location.href = result.redirect;
+            } else {
+              // Handle error from JSON response
+              const errorMsg = document.getElementById('error-message');
+              errorMsg.textContent = result.error || 'Login failed. Please try again.';
+              errorMsg.style.display = 'block';
+            }
+          } else {
+            // Handle redirect or HTML response
+            const text = await response.text();
+            console.log('📄 Got HTML response, analyzing content...');
+            if (text.includes('student') || text.includes('registration')) {
+              console.log('🎯 Detected students content, redirecting to /students');
+              window.location.href = '/students';
+            } else {
+              console.log('🏠 Redirecting to home page');
+              window.location.href = '/home.html';
+            }
+          }
+        } else {
+          // Handle error response
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const result = await response.json();
+            const errorMsg = document.getElementById('error-message');
+            errorMsg.textContent = result.error || 'Login failed. Please check your credentials.';
+            errorMsg.style.display = 'block';
+          } else {
+            const errorText = await response.text();
+            let errorMsg = 'Login failed. Please check your credentials.';
+            
+            if (errorText.includes('Invalid')) {
+              errorMsg = 'Invalid username or password.';
+            }
+            
+            document.getElementById('error-message').textContent = errorMsg;
+            document.getElementById('error-message').style.display = 'block';
+          }
+        }
+      } catch (error) {
+        console.error('❌ Login error:', error);
+        const errorMsg = document.getElementById('error-message');
+        errorMsg.textContent = 'Network error. Please try again.';
+        errorMsg.style.display = 'block';
+      } finally {
+        console.log('🔄 Resetting button state...');
+        // Reset button state
+        loginBtn.classList.remove('loading');
+        loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
+        loginBtn.disabled = false;
+      }
+    }
     
-    // Show success message if redirected from logout
-    if (window.location.search.includes('logout=success')) {
+    // Show help information
+    function showInfo() {
+      alert('For access credentials, please contact the system administrator.\n\nDefault credentials:\nUsername: admin\nPassword: admin123');
+    }
+    
+    // Check for URL parameters that indicate login errors
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('error') === 'invalid') {
+      const errorMsg = document.getElementById('error-message');
+      errorMsg.textContent = 'Invalid username or password. Please try again.';
+      errorMsg.style.display = 'block';
+    } else if (urlParams.get('message') === 'logout') {
       const successMsg = document.getElementById('success-message');
       successMsg.textContent = 'You have been successfully logged out.';
       successMsg.style.display = 'block';
     }
+    
+    // Add subtle animations on input focus
+    document.querySelectorAll('input').forEach(input => {
+      input.addEventListener('focus', function() {
+        this.parentElement.style.transform = 'scale(1.02)';
+      });
+      
+      input.addEventListener('blur', function() {
+        this.parentElement.style.transform = 'scale(1)';
+      });
+    });
   </script>
 </body>
-</html>
+</html>	

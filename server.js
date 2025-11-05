@@ -2,7 +2,8 @@ const express = require('express');
 const axios = require('axios');
 const fs = require('fs');
 const bodyParser = require('body-parser');
-const { Pool } = require('pg');
+const { createDatabasePool } = require('./db-config');
+const { students, attendanceRecords } = require('./temp-data');
 const path = require('path');
 const bcrypt = require('bcrypt');
 const helmet = require('helmet');
@@ -28,22 +29,40 @@ if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN &&
   console.log('⚠️  Twilio credentials not configured - SMS notifications disabled');
 }
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || process.env.DB_URL || `postgresql://${process.env.DB_USER || 'postgres'}:${process.env.DB_PASSWORD || ''}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 5432}/${process.env.DB_NAME || 'attendance_portal'}`,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-});
+// Create database pool using the new configuration
+const pool = createDatabasePool();
 
-// Test database connection
-pool.connect((err, client, release) => {
-  if (err) {
-    console.error('❌ Database connection failed:', err.message);
-    console.error('Please check your database configuration in .env file');
-    console.error('Make sure PostgreSQL is running and the database exists');
-  } else {
+// Test database connection with better error handling
+async function testDatabaseConnection() {
+  try {
+    console.log('🔄 Testing database connection...');
+    console.log('📍 Environment:', process.env.NODE_ENV);
+    console.log('🌐 DATABASE_URL exists:', !!process.env.DATABASE_URL);
+    
+    const client = await pool.connect();
     console.log('✅ Connected to PostgreSQL database successfully');
-    release();
+    
+    // Test a simple query
+    const result = await client.query('SELECT NOW()');
+    console.log('⏰ Database time:', result.rows[0].now);
+    
+    client.release();
+  } catch (err) {
+    console.error('❌ Database connection failed:', err.message);
+    console.error('🔍 Error details:', {
+      code: err.code,
+      errno: err.errno,
+      syscall: err.syscall,
+      hostname: err.hostname,
+      port: err.port
+    });
+    console.error('Please check your database configuration');
+    console.error('Make sure PostgreSQL is running and accessible');
   }
-});
+}
+
+// Call the test function
+testDatabaseConnection();
 
 // Security middleware
 if (process.env.NODE_ENV === 'production') {
@@ -84,6 +103,15 @@ app.use('/mark-attendance', limiter);
 // Middleware
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json()); // Add JSON support for browser forms
+
+// Add middleware logging (after body parser)
+app.use((req, res, next) => {
+  console.log(`📥 ${req.method} ${req.path} - ${new Date().toISOString()}`);
+  if (req.method === 'POST') {
+    console.log('📋 POST Body:', req.body);
+  }
+  next();
+});
 
 // Add comprehensive request logging middleware
 app.use((req, res, next) => {
@@ -155,24 +183,26 @@ app.get('/api/students', async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const pageSize = 20;
   const offset = (page - 1) * pageSize;
+  
   try {
-    const result = await pool.query(
-      'SELECT * FROM students ORDER BY id LIMIT $1 OFFSET $2',
-      [pageSize, offset]
-    );
-    // Get total count for pagination
-    const countResult = await pool.query('SELECT COUNT(*) FROM students');
-    const total = parseInt(countResult.rows[0].count);
-    const totalPages = Math.ceil(total / pageSize);
-
+    // Use temporary data instead of database
+    const studentsArray = Array.from(students.values());
+    
     // Add QR code image URL for each student
-    const studentsWithQR = result.rows.map(s => ({
+    const studentsWithQR = studentsArray.map(s => ({
       ...s,
       qr_img_url: `/qrcodes/${s.student_id}.png`
     }));
 
+    // Paginate the results
+    const paginatedStudents = studentsWithQR.slice(offset, offset + pageSize);
+    const total = studentsArray.length;
+    const totalPages = Math.ceil(total / pageSize);
+
+    console.log(`📊 Returning ${paginatedStudents.length} students (page ${page}/${totalPages})`);
+
     res.json({
-      students: studentsWithQR,
+      students: paginatedStudents,
       total,
       page,
       pageSize,
@@ -195,71 +225,101 @@ app.post('/dashboard', async (req, res) => {
   // Input validation
   if (!username || !password) {
     console.log('❌ Missing username or password');
-    return res.status(400).send('<h2>Username and password are required</h2><a href="/login.html">Try again</a>');
+    return res.status(400).json({ success: false, error: 'Username and password are required' });
   }
 
   console.log(`🔍 Attempting login for username: ${username}`);
 
   try {
-    // Get the user by username
-    console.log('📋 Querying database for user...');
-    const result = await pool.query(
-      'SELECT * FROM admins WHERE username = $1',
-      [username]
-    );
-    
-    console.log(`📊 Database query result: ${result.rows.length} rows found`);
-    
-    if (result.rows.length === 0) {
-      console.log(`❌ Login attempt failed for username: ${username} - user not found`);
-      return res.status(401).send('<h2>Invalid username or password</h2><a href="/login.html">Try again</a>');
-    }
-    
-    const user = result.rows[0];
-    console.log(`👤 Found user: ${user.username}, checking password...`);
-    
-    // Check password - handle both hashed and plain text for migration period
-    let passwordMatches = false;
-    
-    if (user.password_hash.startsWith('$2b$')) {
-      // Bcrypt hashed password
-      console.log('🔒 Using bcrypt password verification');
-      passwordMatches = await bcrypt.compare(password, user.password_hash);
-    } else {
-      // Plain text password (for migration) - not recommended for production
-      console.log('⚠️  Using plain text password verification');
-      passwordMatches = user.password_hash === password;
+    // First check if it's a student login (format MCA###)
+    if (/^MCA\d{3}$/.test(username)) {
+      console.log('�‍🎓 Student login detected');
       
-      // If plain text password matches, hash it for future use
-      if (passwordMatches) {
-        const hashedPassword = await bcrypt.hash(password, parseInt(process.env.BCRYPT_ROUNDS) || 10);
-        await pool.query(
-          'UPDATE admins SET password_hash = $1 WHERE id = $2',
-          [hashedPassword, user.id]
-        );
-        console.log(`🔄 Password upgraded to hash for user: ${username}`);
+      // Use temporary data for now (since database is not working)
+      const student = students.get(username);
+      
+      if (student && student.password === password) {
+        console.log(`✅ Student login successful for: ${username}`);
+        
+        // Check if request expects JSON (AJAX) or HTML (form submission)
+        const acceptsJson = req.headers.accept && req.headers.accept.includes('application/json');
+        const isAjax = req.xhr || req.headers['x-requested-with'] === 'XMLHttpRequest';
+        
+        if (acceptsJson || isAjax) {
+          return res.status(200).json({
+            success: true,
+            redirect: '/home.html',
+            user: {
+              id: student.student_id,
+              name: student.name,
+              type: 'student'
+            }
+          });
+        } else {
+          // Traditional form submission - redirect directly
+          return res.redirect('/home.html');
+        }
+      } else {
+        console.log(`❌ Student login failed for: ${username}`);
+        
+        const acceptsJson = req.headers.accept && req.headers.accept.includes('application/json');
+        const isAjax = req.xhr || req.headers['x-requested-with'] === 'XMLHttpRequest';
+        
+        if (acceptsJson || isAjax) {
+          return res.status(401).json({
+            success: false,
+            error: 'Invalid student ID or password'
+          });
+        } else {
+          return res.redirect('/login.html?error=invalid');
+        }
       }
     }
-
-    console.log(`🔐 Password verification result: ${passwordMatches}`);
-
-    if (passwordMatches) {
-      console.log(`✅ Successful login for user: ${username}`);
+    
+    // Admin login - use hardcoded admin for testing (since database is not working)
+    console.log('👨‍💼 Admin login detected');
+    
+    if (username === 'admin' && password === 'admin123') {
+      console.log('✅ Admin login successful (hardcoded)');
       
-      // Always send JSON response for consistency
-      console.log('📤 Sending JSON success response');
-      res.json({ success: true, redirect: '/home.html' });
+      const acceptsJson = req.headers.accept && req.headers.accept.includes('application/json');
+      const isAjax = req.xhr || req.headers['x-requested-with'] === 'XMLHttpRequest';
       
-    } else {
-      console.log(`❌ Login attempt failed for username: ${username} - incorrect password`);
-      
-      // Always send JSON error response for consistency
-      console.log('📤 Sending JSON error response');
-      res.status(401).json({ success: false, error: 'Invalid username or password' });
+      if (acceptsJson || isAjax) {
+        return res.status(200).json({
+          success: true,
+          redirect: '/home.html',
+          user: {
+            username: 'admin',
+            name: 'Administrator',
+            type: 'admin'
+          }
+        });
+      } else {
+        return res.redirect('/home.html');
+      }
     }
-  } catch (err) {
-    console.error('❌ Login error:', err);
-    res.status(500).send('<h2>Internal server error</h2><a href="/login.html">Try again</a>');
+    
+    console.log(`❌ Admin login failed for username: ${username}`);
+    
+    const acceptsJson = req.headers.accept && req.headers.accept.includes('application/json');
+    const isAjax = req.xhr || req.headers['x-requested-with'] === 'XMLHttpRequest';
+    
+    if (acceptsJson || isAjax) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid username or password'
+      });
+    } else {
+      return res.redirect('/login.html?error=invalid');
+    }
+    
+  } catch (error) {
+    console.error('❌ Login error:', error.message);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error during login'
+    });
   }
 });
 
@@ -306,60 +366,66 @@ app.post('/add-student', async (req, res) => {
     // Auto-generate student ID if not provided
     let finalStudentId = studentId;
     if (!finalStudentId) {
-      const countResult = await pool.query('SELECT COUNT(*) FROM students');
-      const count = parseInt(countResult.rows[0].count) + 1;
+      const count = students.length + 1;
       finalStudentId = `STU${count.toString().padStart(4, '0')}`;
     }
     
     // Check if student ID already exists
-    const existingStudent = await pool.query(
-      'SELECT student_id FROM students WHERE student_id = $1',
-      [finalStudentId]
-    );
+    const existingStudent = students.find(s => s.studentId === finalStudentId);
     
-    if (existingStudent.rows.length > 0) {
+    if (existingStudent) {
       return res.status(400).send('<h2>Student ID already exists</h2><a href="/students">Back to Students</a>');
     }
+
+    // Create new student object
+    const newStudent = {
+      studentId: finalStudentId,
+      name: fullName,
+      firstName: firstName,
+      lastName: lastName,
+      phoneNumber: phoneNumber,
+      email: email || `${firstName.toLowerCase()}.${lastName.toLowerCase()}@student.edu`,
+      parentContact: parent_mobile,
+      class: studentClass,
+      division: division,
+      dateOfBirth: dob || 'N/A',
+      gender: gender || 'N/A',
+      address: `${address1 || ''} ${address2 || ''}`.trim() || 'N/A',
+      city: city || 'N/A',
+      state: state || 'N/A',
+      joinDate: new Date().toISOString().split('T')[0]
+    };
+
+    // Add to students array
+    students.push(newStudent);
     
-    const result = await pool.query(
-      `INSERT INTO students (student_id, name, first_name, last_name, phone, email, parent_mobile, class, division, dob, gender, address1, address2, city, state) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
-      [finalStudentId, fullName, firstName, lastName, phoneNumber, email, parent_mobile, studentClass, division, dob, gender, address1, address2, city, state]
-    );
-    console.log('Student inserted successfully:', result.rows[0]);
-    const newStudent = result.rows[0];
+    console.log('Student inserted successfully:', newStudent);
 
-    // Generate QR code using Python service
+    // Generate QR code using built-in QRCode library
     try {
-      console.log('Requesting QR code for:', finalStudentId);
-      const qrData = `ID: ${finalStudentId}\nName: ${fullName}\nPhone: ${phoneNumber}\nEmail: ${email}`;
-      const qrRes = await axios.post('http://localhost:5050/generate-qr', {
-        data: qrData
-      }, { responseType: 'arraybuffer' });
+      console.log('Generating QR code for:', finalStudentId);
+      const qrData = `ID: ${finalStudentId}\nName: ${fullName}\nPhone: ${phoneNumber}\nEmail: ${newStudent.email}`;
+      const qrDataURL = await QRCode.toDataURL(qrData);
 
-      console.log('QR code response status:', qrRes.status);
-      console.log('QR code response headers:', qrRes.headers);
       // Ensure qrcodes directory exists
       const qrDir = path.join(__dirname, 'qrcodes');
       if (!fs.existsSync(qrDir)) {
         fs.mkdirSync(qrDir);
         console.log('Created qrcodes directory:', qrDir);
       }
+      
       // Save QR code image to disk
       const qrPath = path.join(qrDir, `${finalStudentId}.png`);
-      fs.writeFileSync(qrPath, qrRes.data);
+      const base64Data = qrDataURL.replace(/^data:image\/png;base64,/, "");
+      fs.writeFileSync(qrPath, base64Data, 'base64');
       console.log('QR code saved:', qrPath);
     } catch (err) {
       console.error('QR code generation failed:', err);
     }
 
-    // Fetch and log all students after insert
-    try {
-      const allStudents = await pool.query('SELECT * FROM students ORDER BY created_at DESC LIMIT 5');
-      console.log('Recent students:', allStudents.rows);
-    } catch (fetchErr) {
-      console.error('Error fetching students:', fetchErr);
-    }
+    // Log recent students
+    console.log('Recent students:', students.slice(-5));
+    
     // Display QR code image on success page
     const qrImgUrl = `/qrcodes/${finalStudentId}.png`;
     res.send(`
@@ -385,7 +451,7 @@ app.post('/add-student', async (req, res) => {
       </div>
     `);
   } catch (err) {
-    console.error('Error inserting student:', err);
+    console.error('Error adding student:', err);
     res.status(500).send(`
       <div style="font-family: 'Roboto', Arial, sans-serif; padding: 40px; max-width: 600px; margin: 0 auto; text-align: center;">
         <h2 style="color: #dc3545;">Error Adding Student</h2>
@@ -405,25 +471,20 @@ app.post('/mark-attendance', async (req, res) => {
   
   try {
     // Check if student exists
-    const studentCheck = await pool.query(
-      'SELECT * FROM students WHERE student_id = $1',
-      [studentId]
-    );
+    const student = students.find(s => s.studentId === studentId);
     
-    if (studentCheck.rows.length === 0) {
+    if (!student) {
       return res.status(404).json({ success: false, message: 'Student not found.' });
     }
     
-    const student = studentCheck.rows[0];
-    
     // Check if attendance already marked today
     const today = new Date().toISOString().split('T')[0];
-    const existingAttendance = await pool.query(
-      'SELECT * FROM attendance WHERE student_id = $1 AND DATE(timestamp) = $2',
-      [studentId, today]
+    const existingAttendance = attendanceRecords.find(record => 
+      record.studentId === studentId && 
+      record.date === today
     );
     
-    if (existingAttendance.rows.length > 0) {
+    if (existingAttendance) {
       return res.json({ 
         success: false, 
         message: `Attendance already marked for ${student.name} today.` 
@@ -431,18 +492,29 @@ app.post('/mark-attendance', async (req, res) => {
     }
     
     // Mark attendance
-    await pool.query('INSERT INTO attendance (student_id) VALUES ($1)', [studentId]);
+    const newAttendanceRecord = {
+      id: attendanceRecords.length + 1,
+      studentId: studentId,
+      name: student.name,
+      firstName: student.firstName || student.name.split(' ')[0],
+      lastName: student.lastName || student.name.split(' ')[1] || '',
+      date: today,
+      timestamp: new Date().toISOString(),
+      status: 'present'
+    };
+    
+    attendanceRecords.push(newAttendanceRecord);
 
-    // Send SMS notification (only if Twilio is configured)
-    if (student.parent_mobile && twilioClient && TWILIO_PHONE) {
+    // Send SMS notification (only if Twilio is configured and parent contact exists)
+    if (student.parentContact && twilioClient && TWILIO_PHONE) {
       try {
         const message = `Dear Parent, your child ${student.name} has marked attendance at ${new Date().toLocaleString()}.`;
         await twilioClient.messages.create({
           body: message,
           from: TWILIO_PHONE,
-          to: student.parent_mobile
+          to: student.parentContact
         });
-        console.log(`SMS sent to ${student.parent_mobile}`);
+        console.log(`SMS sent to ${student.parentContact}`);
       } catch (smsError) {
         console.error('SMS sending failed:', smsError.message);
       }
@@ -461,14 +533,12 @@ app.post('/mark-attendance', async (req, res) => {
 // Get attendance records for UI
 app.get('/api/attendance', async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT a.id, a.student_id, s.name, s.first_name, s.last_name, a.timestamp, a.status
-       FROM attendance a
-       JOIN students s ON a.student_id = s.student_id
-       ORDER BY a.timestamp DESC
-       LIMIT 100`
-    );
-    res.json({ records: result.rows });
+    // Return attendance records sorted by timestamp (newest first)
+    const sortedRecords = attendanceRecords
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+      .slice(0, 100); // Limit to 100 most recent records
+    
+    res.json({ records: sortedRecords });
   } catch (err) {
     console.error('Error fetching attendance:', err);
     res.status(500).json({ error: 'Failed to fetch attendance records.' });
