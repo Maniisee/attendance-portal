@@ -1,5 +1,4 @@
 const express = require('express');
-const axios = require('axios');
 const fs = require('fs');
 const bodyParser = require('body-parser');
 const { students, attendanceRecords } = require('./temp-data');
@@ -12,107 +11,52 @@ const QRCode = require('qrcode');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Load environment variables first
+// Load environment variables
 require('dotenv').config();
 
-// Twilio setup - only initialize if credentials are provided
-let twilioClient = null;
-let TWILIO_PHONE = null;
-
-if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && 
-    process.env.TWILIO_ACCOUNT_SID.startsWith('AC')) {
-  const twilio = require('twilio');
-  twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-  TWILIO_PHONE = process.env.TWILIO_PHONE_NUMBER;
-  console.log('✅ Twilio SMS service initialized');
-} else {
-  console.log('⚠️  Twilio credentials not configured - SMS notifications disabled');
-}
-
-console.log('🚀 Server starting with temporary data storage - FIXED VERSION 2.0');
+console.log('🚀 Server starting with temporary data storage - CLEAN VERSION');
 console.log('📊 Total students loaded:', students.length);
 console.log('📝 Total attendance records loaded:', attendanceRecords.length);
+
 // Security middleware
 if (process.env.NODE_ENV === 'production') {
   app.use(helmet());
 } else {
-  // Development: Completely disable HTTPS enforcement and upgrades
   app.use(helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"], // Allow inline scripts in development
-        styleSrc: ["'self'", "'unsafe-inline'", "https:"],
-        upgradeInsecureRequests: null, // Completely disable HTTPS upgrade
-      },
-    },
-    hsts: false, // Disable HTTPS enforcement
-    noSniff: false, // Allow content type sniffing in development
-    frameguard: false, // Disable X-Frame-Options in development
+    contentSecurityPolicy: false,
+    crossOriginOpenerPolicy: false,
+    crossOriginResourcePolicy: false,
+    hsts: false,
+    referrerPolicy: false,
   }));
-  
-  // Add custom header to explicitly tell browser not to upgrade requests  
-  app.use((req, res, next) => {
-    res.removeHeader('Content-Security-Policy');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https:;");
-    next();
-  });
 }
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.'
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100 // limit each IP to 100 requests per windowMs
 });
-app.use('/api/', limiter);
+
+app.use('/api', limiter);
+app.use('/login', limiter);
+app.use('/add-student', limiter);
 app.use('/mark-attendance', limiter);
 
-// Middleware
+// Body parser middleware
+app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json()); // Add JSON support for browser forms
 
-// Add middleware logging (after body parser)
-app.use((req, res, next) => {
-  console.log(`📥 ${req.method} ${req.path} - ${new Date().toISOString()}`);
-  if (req.method === 'POST') {
-    console.log('📋 POST Body:', req.body);
-  }
-  next();
-});
-
-// Add comprehensive request logging middleware
-app.use((req, res, next) => {
-  const timestamp = new Date().toISOString();
-  console.log(`🌐 ${timestamp} - ${req.method} ${req.path}`);
-  console.log(`📋 Headers:`, req.headers);
-  if (req.body && Object.keys(req.body).length > 0) {
-    console.log(`📦 Body:`, req.body);
-  }
-  next();
-});
-
-// Add logging middleware for debugging
-app.use('/add-student', (req, res, next) => {
-  console.log('=== INCOMING REQUEST TO /add-student ===');
-  console.log('Method:', req.method);
-  console.log('Content-Type:', req.headers['content-type']);
-  console.log('Body received:', req.body);
-  next();
-});
-
-app.use(express.static(__dirname));
-// Serve QR code images from /qrcodes
+// Static files
+app.use(express.static(path.join(__dirname, '.')));
 app.use('/qrcodes', express.static(path.join(__dirname, 'qrcodes')));
 
-// Root route - serve login page
+// Routes
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'login.html'));
 });
 
-// Serve home and students pages
-app.get('/home.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'home.html'));
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'login.html'));
 });
 
 app.get('/home', (req, res) => {
@@ -123,175 +67,124 @@ app.get('/students', (req, res) => {
   res.sendFile(path.join(__dirname, 'students.html'));
 });
 
-// Serve attendance and scan pages
-app.get('/attendance.html', (req, res) => {
+app.get('/attendance', (req, res) => {
   res.sendFile(path.join(__dirname, 'attendance.html'));
 });
-app.get('/scan.html', (req, res) => {
+
+app.get('/scan', (req, res) => {
   res.sendFile(path.join(__dirname, 'scan.html'));
 });
 
-// Dashboard route - redirect to home page (main dashboard)
-app.get('/dashboard', (req, res) => {
-  res.redirect('/home.html');
-});
+// Admin/Student credentials
+const adminCredentials = {
+  username: 'admin',
+  password: bcrypt.hashSync('admin123', 10)
+};
 
-// Logout route
-app.post('/logout', (req, res) => {
-  // Since we're not using sessions, just redirect to login
-  res.json({ success: true, redirect: '/' });
-});
+// Student login (they can use their student ID)
+const studentPasswords = {
+  'MCA001': bcrypt.hashSync('password123', 10),
+  'MCA002': bcrypt.hashSync('password123', 10),
+  'MCA003': bcrypt.hashSync('password123', 10)
+};
 
-app.get('/logout', (req, res) => {
-  res.redirect('/');
-});
+// Login route with dual response handling
+app.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+  console.log('📋 Login attempt:', { username, timestamp: new Date().toISOString() });
 
-// API to get students with pagination and QR code URL
-app.get('/api/students', async (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const pageSize = 20;
-  const offset = (page - 1) * pageSize;
-  
+  const isJsonRequest = req.headers['content-type']?.includes('application/json') ||
+                       req.headers['accept']?.includes('application/json');
+
   try {
-    // Use temporary data instead of database
-    const studentsArray = Array.from(students.values());
+    let isValid = false;
+    let userType = '';
+
+    // Check admin credentials
+    if (username === adminCredentials.username) {
+      isValid = await bcrypt.compare(password, adminCredentials.password);
+      userType = 'admin';
+    }
+    // Check student credentials
+    else if (studentPasswords[username]) {
+      isValid = await bcrypt.compare(password, studentPasswords[username]);
+      userType = 'student';
+    }
+    // Check if username matches any student ID from temp data
+    else {
+      const student = students.find(s => s.studentId === username);
+      if (student && password === 'password123') {
+        isValid = true;
+        userType = 'student';
+      }
+    }
+
+    if (isValid) {
+      console.log('✅ Login successful:', { username, userType });
+      
+      if (isJsonRequest) {
+        return res.json({ 
+          success: true, 
+          message: 'Login successful',
+          redirectUrl: '/home',
+          userType: userType
+        });
+      } else {
+        return res.redirect('/home');
+      }
+    } else {
+      console.log('❌ Login failed:', { username });
+      
+      if (isJsonRequest) {
+        return res.status(401).json({ 
+          success: false, 
+          message: 'Invalid credentials' 
+        });
+      } else {
+        return res.status(401).send(`
+          <div style="font-family: Arial, sans-serif; padding: 40px; text-align: center;">
+            <h2 style="color: #dc3545;">Login Failed</h2>
+            <p>Invalid username or password.</p>
+            <a href="/login" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">Try Again</a>
+          </div>
+        `);
+      }
+    }
+  } catch (error) {
+    console.error('Login error:', error);
     
-    // Add QR code image URL for each student
-    const studentsWithQR = studentsArray.map(s => ({
-      ...s,
-      qr_img_url: `/qrcodes/${s.student_id}.png`
-    }));
+    if (isJsonRequest) {
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Server error' 
+      });
+    } else {
+      return res.status(500).send(`
+        <div style="font-family: Arial, sans-serif; padding: 40px; text-align: center;">
+          <h2 style="color: #dc3545;">Server Error</h2>
+          <p>Please try again later.</p>
+          <a href="/login" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">Back to Login</a>
+        </div>
+      `);
+    }
+  }
+});
 
-    // Paginate the results
-    const paginatedStudents = studentsWithQR.slice(offset, offset + pageSize);
-    const total = studentsArray.length;
-    const totalPages = Math.ceil(total / pageSize);
-
-    console.log(`📊 Returning ${paginatedStudents.length} students (page ${page}/${totalPages})`);
-
+// Get students API
+app.get('/api/students', (req, res) => {
+  try {
     res.json({
-      students: paginatedStudents,
-      total,
-      page,
-      pageSize,
-      totalPages
+      success: true,
+      students: students,
+      total: students.length
     });
   } catch (err) {
     console.error('Error fetching students:', err);
-    res.status(500).json({ error: 'Failed to fetch students' });
+    res.status(500).json({ error: 'Failed to fetch students.' });
   }
 });
 
-// Handle login page
-app.post('/dashboard', async (req, res) => {
-  console.log('🔐 LOGIN ATTEMPT RECEIVED');
-  console.log('Headers:', req.headers);
-  console.log('Body:', req.body);
-  
-  const { username, password } = req.body;
-
-  // Input validation
-  if (!username || !password) {
-    console.log('❌ Missing username or password');
-    return res.status(400).json({ success: false, error: 'Username and password are required' });
-  }
-
-  console.log(`🔍 Attempting login for username: ${username}`);
-
-  try {
-    // First check if it's a student login (format MCA###)
-    if (/^MCA\d{3}$/.test(username)) {
-      console.log('�‍🎓 Student login detected');
-      
-      // Use temporary data for now (since database is not working)
-      const student = students.get(username);
-      
-      if (student && student.password === password) {
-        console.log(`✅ Student login successful for: ${username}`);
-        
-        // Check if request expects JSON (AJAX) or HTML (form submission)
-        const acceptsJson = req.headers.accept && req.headers.accept.includes('application/json');
-        const isAjax = req.xhr || req.headers['x-requested-with'] === 'XMLHttpRequest';
-        
-        if (acceptsJson || isAjax) {
-          return res.status(200).json({
-            success: true,
-            redirect: '/home.html',
-            user: {
-              id: student.student_id,
-              name: student.name,
-              type: 'student'
-            }
-          });
-        } else {
-          // Traditional form submission - redirect directly
-          return res.redirect('/home.html');
-        }
-      } else {
-        console.log(`❌ Student login failed for: ${username}`);
-        
-        const acceptsJson = req.headers.accept && req.headers.accept.includes('application/json');
-        const isAjax = req.xhr || req.headers['x-requested-with'] === 'XMLHttpRequest';
-        
-        if (acceptsJson || isAjax) {
-          return res.status(401).json({
-            success: false,
-            error: 'Invalid student ID or password'
-          });
-        } else {
-          return res.redirect('/login.html?error=invalid');
-        }
-      }
-    }
-    
-    // Admin login - use hardcoded admin for testing (since database is not working)
-    console.log('👨‍💼 Admin login detected');
-    
-    if (username === 'admin' && password === 'admin123') {
-      console.log('✅ Admin login successful (hardcoded)');
-      
-      const acceptsJson = req.headers.accept && req.headers.accept.includes('application/json');
-      const isAjax = req.xhr || req.headers['x-requested-with'] === 'XMLHttpRequest';
-      
-      if (acceptsJson || isAjax) {
-        return res.status(200).json({
-          success: true,
-          redirect: '/home.html',
-          user: {
-            username: 'admin',
-            name: 'Administrator',
-            type: 'admin'
-          }
-        });
-      } else {
-        return res.redirect('/home.html');
-      }
-    }
-    
-    console.log(`❌ Admin login failed for username: ${username}`);
-    
-    const acceptsJson = req.headers.accept && req.headers.accept.includes('application/json');
-    const isAjax = req.xhr || req.headers['x-requested-with'] === 'XMLHttpRequest';
-    
-    if (acceptsJson || isAjax) {
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid username or password'
-      });
-    } else {
-      return res.redirect('/login.html?error=invalid');
-    }
-    
-  } catch (error) {
-    console.error('❌ Login error:', error.message);
-    return res.status(500).json({
-      success: false,
-      error: 'Server error during login'
-    });
-  }
-});
-
-// Handle student form submission
+// Add student
 app.post('/add-student', async (req, res) => {
   console.log('📝 Student registration request received');
   console.log('Content-Type:', req.headers['content-type']);
@@ -371,9 +264,9 @@ app.post('/add-student', async (req, res) => {
     // Add to students array
     students.push(newStudent);
     
-    console.log('Student inserted successfully:', newStudent);
+    console.log('✅ Student added successfully:', newStudent);
 
-    // Generate QR code using built-in QRCode library
+    // Generate QR code
     try {
       console.log('Generating QR code for:', finalStudentId);
       const qrData = `ID: ${finalStudentId}\nName: ${fullName}\nPhone: ${phoneNumber}\nEmail: ${newStudent.email}`;
@@ -395,9 +288,6 @@ app.post('/add-student', async (req, res) => {
       console.error('QR code generation failed:', err);
     }
 
-    // Log recent students
-    console.log('Recent students:', students.slice(-5));
-    
     // Return JSON response for successful registration
     const qrImgUrl = `/qrcodes/${finalStudentId}.png`;
     res.json({
@@ -415,7 +305,7 @@ app.post('/add-student', async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('Error adding student:', err);
+    console.error('❌ Error adding student:', err);
     res.status(500).json({
       success: false,
       error: 'Failed to add student. Please try again.'
@@ -423,7 +313,7 @@ app.post('/add-student', async (req, res) => {
   }
 });
 
-// Mark attendance and send SMS notification
+// Mark attendance
 app.post('/mark-attendance', async (req, res) => {
   const studentId = req.body.studentId || req.body.id || req.body.qr || null;
   if (!studentId) {
@@ -466,21 +356,6 @@ app.post('/mark-attendance', async (req, res) => {
     
     attendanceRecords.push(newAttendanceRecord);
 
-    // Send SMS notification (only if Twilio is configured and parent contact exists)
-    if (student.parentContact && twilioClient && TWILIO_PHONE) {
-      try {
-        const message = `Dear Parent, your child ${student.name} has marked attendance at ${new Date().toLocaleString()}.`;
-        await twilioClient.messages.create({
-          body: message,
-          from: TWILIO_PHONE,
-          to: student.parentContact
-        });
-        console.log(`SMS sent to ${student.parentContact}`);
-      } catch (smsError) {
-        console.error('SMS sending failed:', smsError.message);
-      }
-    }
-
     res.json({ 
       success: true, 
       message: `Attendance marked successfully for ${student.name} (ID: ${studentId})` 
@@ -508,6 +383,7 @@ app.get('/api/attendance', async (req, res) => {
 
 app.listen(port, () => {
   console.log(`🚀 Server running at http://localhost:${port}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔗 QR Service should be running on http://localhost:${process.env.QR_SERVICE_PORT || 5050}`);
+  console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`📊 Students available: ${students.length}`);
+  console.log(`📝 Attendance records: ${attendanceRecords.length}`);
 });
