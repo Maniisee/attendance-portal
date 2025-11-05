@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Scan QR & Mark Attendance</title>
+  <title>QR Scanner - Attendance Portal</title>
   <!-- Multiple CDN sources for Html5Qrcode library with fallbacks -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js" 
           integrity="sha512-r6rDA7W6ZeQhvl8S7yRVQUKVHdexq+GAlNkNNqVC7YyIV+NwqCTJe2hDWCiffTyRNOeGEzRRJ9ifvRm/HCzGYg==" 
           crossorigin="anonymous" 
           referrerpolicy="no-referrer"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <style>
     * {
       margin: 0;
@@ -19,8 +19,8 @@
     }
     
     body {
-      font-family: 'Roboto', Arial, sans-serif;
-      background: #f7f9fa;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       margin: 0;
       padding: 0;
       display: flex;
@@ -28,106 +28,182 @@
     }
     
     .sidebar {
-      width: 220px;
-      background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
-      color: #fff;
+      width: 280px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-right: 1px solid rgba(255, 255, 255, 0.2);
+      color: #333;
       display: flex;
       flex-direction: column;
       align-items: flex-start;
-      padding: 40px 0 0 0;
+      padding: 0;
       min-height: 100vh;
-      box-shadow: 2px 0 8px rgba(40,60,120,0.08);
+      box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1);
+    }
+    
+    .sidebar-header {
+      width: 100%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px 24px;
+      text-align: center;
     }
     
     .sidebar h2 {
-      width: 100%;
-      text-align: center;
-      margin-bottom: 40px;
-      font-size: 1.5rem;
+      font-size: 1.8rem;
       font-weight: 700;
-      letter-spacing: 1px;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
     }
     
-    .nav-link {
-      width: 100%;
-      padding: 18px 32px;
-      color: #fff;
-      text-decoration: none;
-      display: block;
-      transition: all 0.3s ease;
-      border-left: 3px solid transparent;
-      font-size: 16px;
-      font-weight: 500;
-    }
-    
-    .nav-link:hover, .nav-link.active {
-      background: rgba(255, 255, 255, 0.1);
-      border-left-color: #fff;
-      color: #fff;
-    }
-    
-    .main-content {
-      flex: 1;
-      padding: 40px;
-      background: #f7f9fa;
-    }
-    
-    .page-header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 30px 40px;
-      border-radius: 15px;
-      margin-bottom: 40px;
-      box-shadow: 0 8px 32px rgba(40,60,120,0.15);
-    }
-    
-    .page-header h1 {
-      font-size: 2.5rem;
-      font-weight: 700;
-      margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-      gap: 15px;
-    }
-    
-    .page-header p {
-      font-size: 1.2rem;
+    .sidebar-subtitle {
+      font-size: 0.9rem;
       opacity: 0.9;
       font-weight: 400;
     }
     
-    .scanner-section {
-      background: #fff;
-      border-radius: 20px;
-      padding: 40px;
-      box-shadow: 0 8px 32px rgba(40,60,120,0.08);
-      margin-bottom: 30px;
+    .nav-links {
+      width: 100%;
+      padding: 20px 0;
     }
     
-    .controls {
+    .nav-link {
+      width: 100%;
+      padding: 16px 24px;
+      color: #4a5568;
+      text-decoration: none;
+      font-size: 1rem;
+      font-weight: 500;
+      border: none;
+      background: none;
+      text-align: left;
+      transition: all 0.3s ease;
+      cursor: pointer;
+      outline: none;
       display: flex;
-      gap: 15px;
-      margin-bottom: 30px;
-      justify-content: center;
-      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
     }
     
-    .btn {
-      padding: 12px 24px;
+    .nav-link i {
+      width: 18px;
+      text-align: center;
+    }
+    
+    .nav-link:hover {
+      background: linear-gradient(90deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+      color: #667eea;
+      transform: translateX(4px);
+    }
+    
+    .nav-link.active {
+      background: linear-gradient(90deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+      color: #667eea;
+      border-right: 3px solid #667eea;
+      font-weight: 600;
+    }
+    
+    .nav-footer {
+      margin-top: auto;
+      padding: 20px 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      width: 100%;
+    }
+    
+    .logout-btn {
+      width: 100%;
+      padding: 16px 24px;
+      background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
+      color: white;
       border: none;
       border-radius: 12px;
-      font-size: 16px;
+      font-size: 1rem;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.3s ease;
       display: flex;
       align-items: center;
-      gap: 8px;
-      min-width: 140px;
       justify-content: center;
+      gap: 8px;
+      margin: 0 24px;
     }
     
-    .btn:hover {
+    .logout-btn:hover {
+      background: linear-gradient(135deg, #c53030 0%, #9c2626 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(197, 48, 48, 0.3);
+    }
+    
+    .main-content {
+      flex: 1;
+      padding: 40px;
+      background: rgba(255, 255, 255, 0.1);
+      min-width: 0;
+      overflow-y: auto;
+    }
+    
+    .page-header {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 30px;
+      margin-bottom: 30px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .page-header h1 {
+      color: #2d3748;
+      font-size: 2.2rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .page-header p {
+      color: #718096;
+      font-size: 1.1rem;
+      font-weight: 400;
+    }
+    
+    .scanner-section {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      margin-bottom: 30px;
+    }
+    
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+      margin-bottom: 30px;
+      justify-items: center;
+    }
+    
+    .btn {
+      padding: 14px 20px;
+      border: none;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-width: 140px;
+      font-family: 'Inter', sans-serif;
+    }
+    
+    .btn:hover:not(:disabled) {
       transform: translateY(-2px);
       box-shadow: 0 8px 25px rgba(0,0,0,0.15);
     }
@@ -139,38 +215,40 @@
     }
     
     .btn-primary {
-      background: linear-gradient(135deg, #28a745, #20c997);
+      background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
       color: white;
     }
     
     .btn-secondary {
-      background: linear-gradient(135deg, #6c757d, #495057);
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
     }
     
     .btn-danger {
-      background: linear-gradient(135deg, #dc3545, #fd7e14);
+      background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
       color: white;
     }
     
     .btn-warning {
-      background: linear-gradient(135deg, #ffc107, #fd7e14);
+      background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
       color: white;
     }
     
     .qr-reader-container {
       position: relative;
-      margin: 20px auto;
-      border-radius: 15px;
+      margin: 30px auto;
+      border-radius: 20px;
       overflow: hidden;
-      box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-      background: #f8f9fa;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+      background: rgba(248, 250, 252, 0.8);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      max-width: 500px;
     }
     
     #qr-reader {
       width: 100% !important;
-      max-width: 400px !important;
-      margin: 0 auto;
+      border-radius: 20px;
     }
     
     #qr-reader__dashboard_section {
@@ -178,72 +256,93 @@
     }
     
     .scanner-status {
-      margin: 20px 0;
-      padding: 15px;
-      border-radius: 10px;
+      margin: 25px 0;
+      padding: 20px;
+      border-radius: 16px;
       font-weight: 600;
-      font-size: 1.1rem;
+      font-size: 1rem;
       text-align: center;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
     }
     
     .status-waiting {
-      background: #e3f2fd;
-      color: #1976d2;
-      border: 1px solid #bbdefb;
+      background: rgba(59, 130, 246, 0.1);
+      color: #1e40af;
+      border-color: rgba(59, 130, 246, 0.2);
     }
     
     .status-success {
-      background: #e8f5e8;
-      color: #2e7d32;
-      border: 1px solid #a5d6a7;
+      background: rgba(34, 197, 94, 0.1);
+      color: #15803d;
+      border-color: rgba(34, 197, 94, 0.2);
     }
     
     .status-error {
-      background: #ffebee;
-      color: #c62828;
-      border: 1px solid #ef9a9a;
+      background: rgba(239, 68, 68, 0.1);
+      color: #dc2626;
+      border-color: rgba(239, 68, 68, 0.2);
     }
     
     .attendance-result {
-      margin-top: 20px;
+      margin-top: 25px;
       padding: 20px;
-      border-radius: 15px;
-      font-size: 18px;
+      border-radius: 16px;
+      font-size: 1.1rem;
       font-weight: 600;
       text-align: center;
       display: none;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
     }
     
     .result-success {
-      background: linear-gradient(135deg, #d4edda, #c3e6cb);
-      color: #155724;
-      border: 2px solid #c3e6cb;
+      background: rgba(34, 197, 94, 0.15);
+      color: #15803d;
+      border-color: rgba(34, 197, 94, 0.3);
     }
     
     .result-error {
-      background: linear-gradient(135deg, #f8d7da, #f5c6cb);
-      color: #721c24;
-      border: 2px solid #f5c6cb;
+      background: rgba(239, 68, 68, 0.15);
+      color: #dc2626;
+      border-color: rgba(239, 68, 68, 0.3);
     }
     
     .camera-permission {
-      background: #fff3cd;
-      border: 1px solid #ffeaa7;
-      border-radius: 10px;
-      padding: 20px;
+      background: rgba(251, 191, 36, 0.15);
+      border: 1px solid rgba(251, 191, 36, 0.3);
+      border-radius: 16px;
+      padding: 24px;
       margin: 20px 0;
       text-align: center;
       display: none;
+      backdrop-filter: blur(10px);
     }
     
     .camera-permission h4 {
-      color: #856404;
-      margin-bottom: 10px;
+      color: #92400e;
+      margin-bottom: 12px;
+      font-size: 1.1rem;
     }
     
     .camera-permission p {
-      color: #856404;
-      margin-bottom: 15px;
+      color: #92400e;
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+    
+    @media (max-width: 1024px) {
+      .sidebar {
+        width: 260px;
+      }
+      
+      .main-content {
+        padding: 20px;
+      }
+      
+      .scanner-section {
+        padding: 30px 20px;
+      }
     }
     
     @media (max-width: 768px) {
@@ -255,61 +354,89 @@
         width: 100%;
         min-height: auto;
         flex-direction: row;
-        justify-content: space-around;
-        padding: 20px 0;
+        overflow-x: auto;
       }
       
-      .sidebar h2 {
-        display: none;
+      .sidebar-header {
+        padding: 20px;
+        min-width: 200px;
+      }
+      
+      .nav-links {
+        display: flex;
+        padding: 10px 0;
+        min-width: max-content;
       }
       
       .nav-link {
-        padding: 10px 15px;
-        border-left: none;
-        border-bottom: 3px solid transparent;
-        text-align: center;
-        font-size: 14px;
-      }
-      
-      .nav-link:hover, .nav-link.active {
-        border-left: none;
-        border-bottom-color: #fff;
+        white-space: nowrap;
+        padding: 12px 20px;
       }
       
       .main-content {
-        padding: 20px;
+        padding: 20px 16px;
       }
       
       .page-header {
-        padding: 20px;
+        padding: 24px 20px;
       }
       
       .page-header h1 {
-        font-size: 2rem;
+        font-size: 1.8rem;
       }
       
       .scanner-section {
-        padding: 20px;
+        padding: 24px 16px;
       }
       
       .controls {
-        flex-direction: column;
-        align-items: center;
+        grid-template-columns: 1fr;
+        gap: 12px;
       }
       
       .btn {
-        width: 200px;
+        width: 100%;
+        max-width: 280px;
+        margin: 0 auto;
+      }
+      
+      .qr-reader-container {
+        margin: 20px auto;
+        max-width: 90%;
       }
     }
   </style>
 </head>
 <body>
   <div class="sidebar">
-    <h2>🎓 Portal</h2>
-    <a href="home.html" class="nav-link">🏠 Home</a>
-    <a href="students.html" class="nav-link">👥 Students</a>
-    <a href="attendance.html" class="nav-link">📊 Attendance</a>
-    <a href="scan.html" class="nav-link active">📱 QR Scanner</a>
+    <div class="sidebar-header">
+      <h2>Portal</h2>
+      <div class="sidebar-subtitle">Attendance Management</div>
+    </div>
+    <div class="nav-links">
+      <a class="nav-link" href="/home.html">
+        <i class="fas fa-home"></i>
+        Dashboard
+      </a>
+      <a class="nav-link" href="/students">
+        <i class="fas fa-user-graduate"></i>
+        Students Registration
+      </a>
+      <a class="nav-link" href="/attendance.html">
+        <i class="fas fa-chart-line"></i>
+        Attendance Records
+      </a>
+      <a class="nav-link active" href="/scan.html">
+        <i class="fas fa-qrcode"></i>
+        QR Scanner
+      </a>
+    </div>
+    <div class="nav-footer">
+      <button class="logout-btn" onclick="logout()">
+        <i class="fas fa-sign-out-alt"></i>
+        Logout
+      </button>
+    </div>
   </div>
 
   <div class="main-content">
@@ -318,7 +445,7 @@
         <i class="fas fa-qrcode"></i>
         QR Code Scanner
       </h1>
-      <p>Scan QR codes to mark student attendance quickly and efficiently</p>
+      <p>Scan student QR codes to mark attendance instantly</p>
     </div>
 
     <div class="scanner-section">
@@ -332,7 +459,7 @@
           Stop Camera
         </button>
         <button id="switch-btn" class="btn btn-warning" disabled>
-          <i class="fas fa-sync"></i>
+          <i class="fas fa-sync-alt"></i>
           Switch Camera
         </button>
         <button id="test-btn" class="btn btn-secondary">
@@ -354,8 +481,8 @@
 
       <div id="camera-permission" class="camera-permission">
         <h4><i class="fas fa-exclamation-triangle"></i> Camera Permission Required</h4>
-        <p>Please allow camera access in your browser settings and reload the page.</p>
-        <button id="test-btn" class="btn btn-secondary">
+        <p>Please allow camera access in your browser settings and reload the page to use the QR scanner.</p>
+        <button onclick="testCameraAccess()" class="btn btn-secondary">
           <i class="fas fa-redo"></i>
           Test Camera Access
         </button>
@@ -399,7 +526,6 @@
         
         // Initialize new scanner instance
         html5QrCode = new Html5Qrcode("qr-reader");
-        console.log('✅ Html5Qrcode initialized successfully');
         
         // Verify the scanner object was created properly
         if (!html5QrCode || typeof html5QrCode.start !== 'function') {
@@ -422,7 +548,6 @@
     async function getCameras() {
       try {
         updateScannerStatus('Detecting cameras...', 'waiting');
-        console.log('Starting camera detection...');
         
         // Step 1: Check if mediaDevices is supported
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -430,37 +555,29 @@
         }
         
         // Step 2: Request camera permission first
-        console.log('Requesting camera permission...');
         let testStream;
         try {
           testStream = await navigator.mediaDevices.getUserMedia({ 
             video: { width: 640, height: 480 } 
           });
-          console.log('✅ Camera permission granted');
           
           // Stop the test stream immediately
           if (testStream) {
             testStream.getTracks().forEach(track => track.stop());
           }
         } catch (permError) {
-          console.error('❌ Permission error:', permError);
           throw new Error(`Camera permission denied: ${permError.message}`);
         }
         
         // Step 3: Get list of devices using native API
-        console.log('Enumerating video devices...');
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoDevices = devices.filter(device => device.kind === 'videoinput');
-        
-        console.log('Found video devices:', videoDevices);
         
         // Step 4: Convert to format expected by html5-qrcode
         cameras = videoDevices.map(device => ({
           id: device.deviceId,
           label: device.label || `Camera ${videoDevices.indexOf(device) + 1}`
         }));
-        
-        console.log('✅ Cameras processed:', cameras);
         
         // Step 5: Update UI based on camera count
         if (cameras.length > 1) {
@@ -473,8 +590,6 @@
         }
         
       } catch (error) {
-        console.error('❌ Camera detection failed:', error);
-        
         let errorMessage = 'Camera detection failed: ';
         
         if (error.message.includes('permission denied') || error.name === 'NotAllowedError') {
@@ -517,16 +632,13 @@
 
       try {
         updateScannerStatus('Starting camera...', 'waiting');
-        console.log('🎥 Starting camera with', cameras.length, 'available cameras');
         
         // Validate scanner object exists
         if (!html5QrCode) {
-          console.error('❌ Scanner not initialized');
           throw new Error('Scanner not initialized. Please reload the page.');
         }
         
         if (typeof html5QrCode.start !== 'function') {
-          console.error('❌ Scanner start method not available');
           throw new Error('Scanner malfunction. Please reload the page.');
         }
         
@@ -534,11 +646,9 @@
         let cameraConfig = null;
         if (cameras.length > 0) {
           cameraConfig = cameras[currentCameraIndex].id;
-          console.log('📷 Trying specific camera:', cameras[currentCameraIndex].label, '(ID:', cameraConfig, ')');
         } else {
           // Strategy 2: Fallback to environment facing mode
           cameraConfig = { facingMode: "environment" };
-          console.log('📷 Trying environment facing camera');
         }
         
         // Try starting with the selected configuration
@@ -553,7 +663,6 @@
           onScanFailure
         );
 
-        console.log('✅ Camera started successfully');
         isScanning = true;
         startBtn.disabled = true;
         stopBtn.disabled = false;
@@ -562,8 +671,6 @@
         cameraPermission.style.display = 'none';
 
       } catch (error) {
-        console.error('❌ Primary camera start failed:', error);
-        
         // Try fallback strategies
         const fallbackSuccess = await tryFallbackCameras();
         if (fallbackSuccess) {
@@ -571,8 +678,6 @@
         }
         
         // All strategies failed
-        console.error('❌ All camera strategies failed');
-        
         let errorMessage = 'Failed to start camera: ';
         
         if (error.name === 'NotAllowedError' || error.message.includes('Permission')) {
@@ -598,18 +703,15 @@
 
     // Try fallback camera configurations
     async function tryFallbackCameras() {
-      console.log('🔄 Trying fallback camera configurations...');
       updateScannerStatus('Trying alternative camera settings...', 'waiting');
       
       // Validate scanner object exists for fallbacks
       if (!html5QrCode || typeof html5QrCode.start !== 'function') {
-        console.error('❌ Scanner not available for fallbacks');
         return false;
       }
       
       // Fallback 1: Try with user facing camera
       try {
-        console.log('📷 Fallback 1: User facing camera');
         await html5QrCode.start(
           { facingMode: "user" },
           {
@@ -620,7 +722,6 @@
           onScanFailure
         );
         
-        console.log('✅ Fallback 1 successful');
         isScanning = true;
         startBtn.disabled = true;
         stopBtn.disabled = false;
@@ -629,13 +730,12 @@
         return true;
         
       } catch (fallback1Error) {
-        console.log('❌ Fallback 1 failed:', fallback1Error.message);
+        // Try next fallback
       }
       
       // Fallback 2: Try with the first available camera ID if different
       if (cameras.length > 0 && currentCameraIndex !== 0) {
         try {
-          console.log('📷 Fallback 2: First available camera');
           await html5QrCode.start(
             cameras[0].id,
             {
@@ -646,7 +746,6 @@
             onScanFailure
           );
           
-          console.log('✅ Fallback 2 successful');
           currentCameraIndex = 0;
           isScanning = true;
           startBtn.disabled = true;
@@ -656,13 +755,12 @@
           return true;
           
         } catch (fallback2Error) {
-          console.log('❌ Fallback 2 failed:', fallback2Error.message);
+          // Try next fallback
         }
       }
       
       // Fallback 3: Try without any camera specification
       try {
-        console.log('📷 Fallback 3: Default camera');
         await html5QrCode.start(
           undefined,
           {
@@ -673,7 +771,6 @@
           onScanFailure
         );
         
-        console.log('✅ Fallback 3 successful');
         isScanning = true;
         startBtn.disabled = true;
         stopBtn.disabled = false;
@@ -682,7 +779,7 @@
         return true;
         
       } catch (fallback3Error) {
-        console.log('❌ Fallback 3 failed:', fallback3Error.message);
+        // All fallbacks failed
       }
       
       return false; // All fallbacks failed
@@ -721,8 +818,6 @@
 
     // Handle successful QR scan
     function onScanSuccess(decodedText, decodedResult) {
-      console.log('QR Code scanned:', decodedText);
-      
       // Extract student ID from QR code
       const studentId = extractStudentId(decodedText);
       
@@ -748,8 +843,6 @@
 
     // Extract student ID from QR code text
     function extractStudentId(qrText) {
-      console.log('Processing QR text:', qrText);
-      
       // Try different patterns
       const patterns = [
         /ID:\s*([A-Za-z0-9]+)/i,
@@ -762,12 +855,10 @@
         const match = qrText.match(pattern);
         if (match) {
           const studentId = match[1].toUpperCase();
-          console.log('Extracted student ID:', studentId);
           return studentId;
         }
       }
       
-      console.log('No valid student ID found');
       return null;
     }
 
@@ -776,7 +867,7 @@
       try {
         updateScannerStatus('Marking attendance...', 'waiting');
         
-        const response = await fetch('http://localhost:3000/mark-attendance', {
+        const response = await fetch('/mark-attendance', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ studentId: studentId })
@@ -798,7 +889,6 @@
           updateScannerStatus('Failed to mark attendance', 'error');
         }
       } catch (error) {
-        console.error('Network error:', error);
         showAttendanceResult('❌ Network error. Please check connection.', false);
         updateScannerStatus('Network error', 'error');
       }
@@ -849,8 +939,6 @@
 
     // Load fallback CDN if primary fails
     function loadFallbackLibrary() {
-      console.log('🔄 Attempting to load fallback Html5Qrcode library...');
-      
       const fallbackSources = [
         './html5-qrcode.min.js', // Local copy
         'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js',
@@ -861,7 +949,6 @@
       
       function tryNextSource() {
         if (sourceIndex >= fallbackSources.length) {
-          console.error('❌ All fallback sources failed');
           showManualQRInput();
           return;
         }
@@ -869,7 +956,6 @@
         const script = document.createElement('script');
         script.src = fallbackSources[sourceIndex];
         script.onload = () => {
-          console.log(`✅ Fallback library loaded from: ${fallbackSources[sourceIndex]}`);
           // Wait a moment for library to initialize then try again
           setTimeout(() => {
             if (typeof Html5Qrcode !== 'undefined') {
@@ -881,7 +967,6 @@
           }, 500);
         };
         script.onerror = () => {
-          console.log(`❌ Failed to load from: ${fallbackSources[sourceIndex]}`);
           sourceIndex++;
           tryNextSource();
         };
@@ -893,24 +978,23 @@
 
     // Manual QR input fallback when library completely fails
     function showManualQRInput() {
-      console.log('📝 Showing manual QR input fallback');
       updateScannerStatus('QR library unavailable. Please enter student ID manually:', 'error');
       
       // Create manual input UI
       const qrReader = document.getElementById('qr-reader');
       qrReader.innerHTML = `
-        <div style="text-align: center; padding: 20px;">
-          <h3 style="color: #666; margin-bottom: 20px;">Manual Attendance Entry</h3>
-          <div style="margin-bottom: 15px;">
-            <label for="studentId" style="display: block; margin-bottom: 5px; color: #666;">Student ID:</label>
+        <div style="text-align: center; padding: 30px; background: rgba(255,255,255,0.9); border-radius: 16px;">
+          <h3 style="color: #4a5568; margin-bottom: 20px; font-family: 'Inter', sans-serif;">Manual Attendance Entry</h3>
+          <div style="margin-bottom: 20px;">
+            <label for="studentId" style="display: block; margin-bottom: 8px; color: #4a5568; font-weight: 500;">Student ID:</label>
             <input type="text" id="studentId" placeholder="Enter Student ID" 
-                   style="padding: 10px; font-size: 16px; border: 2px solid #ddd; border-radius: 5px; width: 200px;">
+                   style="padding: 12px 16px; font-size: 16px; border: 2px solid #e2e8f0; border-radius: 8px; width: 250px; font-family: 'Inter', sans-serif;">
           </div>
           <button onclick="markAttendanceManually()" 
-                  style="background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 16px;">
-            Mark Attendance
+                  style="background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; font-family: 'Inter', sans-serif;">
+            <i class="fas fa-check"></i> Mark Attendance
           </button>
-          <p style="color: #666; font-size: 14px; margin-top: 15px;">
+          <p style="color: #718096; font-size: 14px; margin-top: 16px; font-family: 'Inter', sans-serif;">
             Or reload the page to try QR scanning again
           </p>
         </div>
@@ -921,7 +1005,6 @@
     function markAttendanceManually() {
       const studentId = document.getElementById('studentId').value.trim();
       if (studentId) {
-        console.log('📝 Manual attendance entry for:', studentId);
         onScanSuccess(studentId, null); // Use existing success handler
       } else {
         alert('Please enter a valid Student ID');
@@ -935,19 +1018,16 @@
       if (typeof Html5Qrcode !== 'undefined') {
         initializeScanner();
       } else {
-        console.log('⏳ Waiting for Html5Qrcode library to load...');
         // Wait for library with timeout
         let attempts = 0;
         const maxAttempts = 30; // 3 seconds total
         const checkLibrary = () => {
           attempts++;
           if (typeof Html5Qrcode !== 'undefined') {
-            console.log('✅ Html5Qrcode library loaded');
             initializeScanner();
           } else if (attempts < maxAttempts) {
             setTimeout(checkLibrary, 100);
           } else {
-            console.error('❌ Primary Html5Qrcode library failed to load, trying fallbacks...');
             loadFallbackLibrary();
           }
         };
@@ -958,9 +1038,30 @@
     // Cleanup on page unload
     window.addEventListener('beforeunload', function() {
       if (isScanning && html5QrCode) {
-        html5QrCode.stop();
+        html5QrCode.stop().catch(() => {});
       }
     });
+    
+    // Logout function
+    async function logout() {
+      if (confirm('Are you sure you want to logout?')) {
+        try {
+          const response = await fetch('/logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          const result = await response.json();
+          if (result.success) {
+            window.location.href = result.redirect;
+          }
+        } catch (error) {
+          console.error('Logout error:', error);
+          // Fallback redirect
+          window.location.href = '/';
+        }
+      }
+    }
   </script>
 </body>
 </html>

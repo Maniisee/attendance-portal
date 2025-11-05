@@ -3,14 +3,7 @@
 A modern, secure web-based attendance management system with QR code scanning capabilities.
 
 ## 🚀 Live Demo
-**[View Live Application](https://attendance-web-production-23d0.up.railway.app)** 
-
-### 📊 System Status
-- **Health Check**: [/health](https://attendance-web-production-23d0.up.railway.app/health)
-- **Detailed Status**: [/status](https://attendance-web-production-23d0.up.railway.app/status)
-- **Current Status**: ✅ Running with resilient architecture
-
-> 🔧 **Note**: Application features graceful fallback handling for database connectivity issues. 
+**[View Live Application](https://postgres-production-fbec.up.railway.app)** 
 
 ## ✨ Features
 
@@ -44,7 +37,7 @@ A modern, secure web-based attendance management system with QR code scanning ca
 ## 🚀 Deployment Status
 
 ✅ **GitHub Repository**: https://github.com/Maniisee/attendance-portal
-✅ **Live Application**: https://attendance-web-production-23d0.up.railway.app
+✅ **Live Application**: https://postgres-production-fbec.up.railway.app
 ✅ **PostgreSQL Database**: Configured and connected
 ✅ **Environment Variables**: Set up for production
 

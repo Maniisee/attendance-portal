@@ -341,7 +341,7 @@
     <div id="error-message" class="error-message"></div>
     <div id="success-message" class="success-message"></div>
     
-    <form id="login-form" action="/dashboard" method="POST">
+    <form id="login-form" onsubmit="handleLogin(event)">
       <div class="form-group">
         <label for="username">Username</label>
         <div class="input-wrapper">
@@ -385,26 +385,112 @@
   </div>
 
   <script>
-    // Add loading state to login button
-    document.getElementById('login-form').addEventListener('submit', function(e) {
+    // Handle login form submission
+    async function handleLogin(event) {
+      console.log('🔐 Login form submitted');
+      event.preventDefault();
+      
       const loginBtn = document.getElementById('login-btn');
       const errorMsg = document.getElementById('error-message');
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      
+      console.log('📋 Login attempt:', { username, password: '***' });
+      
+      // Validate inputs
+      if (!username || !password) {
+        console.log('❌ Validation failed: missing credentials');
+        errorMsg.textContent = 'Please enter both username and password';
+        errorMsg.style.display = 'block';
+        return;
+      }
       
       // Hide any previous error messages
       errorMsg.style.display = 'none';
       
       // Add loading state
+      console.log('⏳ Setting loading state...');
       loginBtn.classList.add('loading');
       loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Signing In...';
       loginBtn.disabled = true;
       
-      // Reset button state after 3 seconds if form doesn't redirect
-      setTimeout(() => {
+      try {
+        console.log('📡 Sending login request...');
+        // Send login request
+        const response = await fetch('/dashboard', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+        });
+        
+        console.log('📊 Response received:', {
+          status: response.status,
+          ok: response.ok,
+          contentType: response.headers.get('content-type')
+        });
+        
+        if (response.ok) {
+          // Check if we got JSON response
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const result = await response.json();
+            if (result.success && result.redirect) {
+              // Simple navigation - just use the redirect path
+              console.log('✅ Login successful, redirecting to:', result.redirect);
+              window.location.href = result.redirect;
+            } else {
+              // Handle error from JSON response
+              const errorMsg = document.getElementById('error-message');
+              errorMsg.textContent = result.error || 'Login failed. Please try again.';
+              errorMsg.style.display = 'block';
+            }
+          } else {
+            // Handle redirect or HTML response
+            const text = await response.text();
+            console.log('📄 Got HTML response, analyzing content...');
+            if (text.includes('student') || text.includes('registration')) {
+              console.log('🎯 Detected students content, redirecting to /students');
+              window.location.href = '/students';
+            } else {
+              console.log('🏠 Redirecting to home page');
+              window.location.href = '/home.html';
+            }
+          }
+        } else {
+          // Handle error response
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const result = await response.json();
+            const errorMsg = document.getElementById('error-message');
+            errorMsg.textContent = result.error || 'Login failed. Please check your credentials.';
+            errorMsg.style.display = 'block';
+          } else {
+            const errorText = await response.text();
+            let errorMsg = 'Login failed. Please check your credentials.';
+            
+            if (errorText.includes('Invalid')) {
+              errorMsg = 'Invalid username or password.';
+            }
+            
+            document.getElementById('error-message').textContent = errorMsg;
+            document.getElementById('error-message').style.display = 'block';
+          }
+        }
+      } catch (error) {
+        console.error('❌ Login error:', error);
+        const errorMsg = document.getElementById('error-message');
+        errorMsg.textContent = 'Network error. Please try again.';
+        errorMsg.style.display = 'block';
+      } finally {
+        console.log('🔄 Resetting button state...');
+        // Reset button state
         loginBtn.classList.remove('loading');
         loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
         loginBtn.disabled = false;
-      }, 3000);
-    });
+      }
+    }
     
     // Show help information
     function showInfo() {

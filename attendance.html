@@ -97,6 +97,37 @@
       font-weight: 600;
     }
     
+    .nav-footer {
+      margin-top: auto;
+      padding: 20px 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      width: 100%;
+    }
+    
+    .logout-btn {
+      width: 100%;
+      padding: 16px 24px;
+      background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin: 0 24px;
+    }
+    
+    .logout-btn:hover {
+      background: linear-gradient(135deg, #c53030 0%, #9c2626 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(197, 48, 48, 0.3);
+    }
+    
     .main-content {
       flex: 1;
       padding: 40px;
@@ -494,9 +525,9 @@
       <div class="sidebar-subtitle">Attendance Management</div>
     </div>
     <div class="nav-links">
-      <a class="nav-link" href="/scan.html">
-        <i class="fas fa-qrcode"></i>
-        Scan Attendance
+      <a class="nav-link" href="/home.html">
+        <i class="fas fa-home"></i>
+        Dashboard
       </a>
       <a class="nav-link" href="/students">
         <i class="fas fa-user-graduate"></i>
@@ -506,6 +537,16 @@
         <i class="fas fa-chart-line"></i>
         Attendance Records
       </a>
+      <a class="nav-link" href="/scan.html">
+        <i class="fas fa-qrcode"></i>
+        QR Scanner
+      </a>
+    </div>
+    <div class="nav-footer">
+      <button class="logout-btn" onclick="logout()">
+        <i class="fas fa-sign-out-alt"></i>
+        Logout
+      </button>
     </div>
   </div>
   
@@ -783,6 +824,27 @@
     
     // Auto-refresh every 30 seconds
     setInterval(loadAttendance, 30000);
+    
+    // Logout function
+    async function logout() {
+      if (confirm('Are you sure you want to logout?')) {
+        try {
+          const response = await fetch('/logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          const result = await response.json();
+          if (result.success) {
+            window.location.href = result.redirect;
+          }
+        } catch (error) {
+          console.error('Logout error:', error);
+          // Fallback redirect
+          window.location.href = '/';
+        }
+      }
+    }
   </script>
 </body>
 </html>

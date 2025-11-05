@@ -7,13 +7,9 @@ const path = require('path');
 const bcrypt = require('bcrypt');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const MemoryStorage = require('./memory-storage');
 
 const app = express();
-const port = process.env.PORT || 8080;
-
-// Configure trust proxy for Railway
-app.set('trust proxy', 1);
+const port = process.env.PORT || 3000;
 
 // Load environment variables first
 require('dotenv').config();
@@ -33,214 +29,50 @@ if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN &&
 }
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { 
-    rejectUnauthorized: false,
-    sslmode: 'require'
-  } : false,
-  // Add connection timeout and retry settings
-  connectionTimeoutMillis: 10000,
-  idleTimeoutMillis: 30000,
-  max: 10,
-  min: 2
+  user: process.env.DB_USER || 'postgres',
+  host: process.env.DB_HOST || 'localhost',
+  database: process.env.DB_NAME || 'attendance_portal',
+  password: process.env.DB_PASSWORD || '',
+  port: process.env.DB_PORT || 5432,
 });
 
-// Test database connection and initialize tables
-let dbConnected = false;
-let memoryStorage = null;
-
-async function initializeDatabase() {
-  let retryCount = 0;
-  const maxRetries = 5; // Increased retries
-  
-  while (retryCount < maxRetries && !dbConnected) {
-    try {
-      console.log(`🔄 Attempting database connection (${retryCount + 1}/${maxRetries})...`);
-      
-      // Test connection with timeout
-      const client = await Promise.race([
-        pool.connect(),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Connection timeout')), 15000)
-        )
-      ]);
-      
-      console.log('✅ Connected to PostgreSQL database successfully');
-      
-      // Test a simple query
-      await client.query('SELECT NOW()');
-      console.log('✅ Database query test successful');
-      
-      // Create tables if they don't exist
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS students (
-          id SERIAL PRIMARY KEY,
-          student_id VARCHAR(50) UNIQUE NOT NULL,
-          name VARCHAR(100) NOT NULL,
-          first_name VARCHAR(50),
-          last_name VARCHAR(50),
-          email VARCHAR(100),
-          phone VARCHAR(20),
-          parent_mobile VARCHAR(20),
-          class VARCHAR(50),
-          division VARCHAR(10),
-          dob DATE,
-          gender VARCHAR(10),
-          address1 TEXT,
-          address2 TEXT,
-          city VARCHAR(50),
-          state VARCHAR(50),
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-      `);
-
-      // Add missing columns if they don't exist (for existing tables)
-      const addColumnIfNotExists = async (columnName, columnDef) => {
-        try {
-          await client.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS ${columnName} ${columnDef};`);
-        } catch (err) {
-          // Column might already exist, ignore error
-          console.log(`Column ${columnName} already exists or error adding:`, err.message);
-        }
-      };
-
-      // Check if we need to add missing columns
-      const tableInfo = await client.query(`
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_name = 'students' AND table_schema = 'public'
-      `);
-      
-      const existingColumns = tableInfo.rows.map(row => row.column_name);
-      console.log('Existing columns:', existingColumns);
-      
-      // If we're missing key columns, recreate the table
-      const requiredColumns = ['first_name', 'last_name', 'parent_mobile', 'class', 'division'];
-      const missingColumns = requiredColumns.filter(col => !existingColumns.includes(col));
-      
-      if (missingColumns.length > 0) {
-        console.log('🔄 Missing columns detected, recreating table with full schema...');
-        
-        // Drop and recreate with full schema
-        await client.query('DROP TABLE IF EXISTS students CASCADE;');
-        await client.query('DROP TABLE IF EXISTS attendance CASCADE;');
-        
-        await client.query(`
-          CREATE TABLE students (
-            id SERIAL PRIMARY KEY,
-            student_id VARCHAR(50) UNIQUE NOT NULL,
-            name VARCHAR(100) NOT NULL,
-            first_name VARCHAR(50),
-            last_name VARCHAR(50),
-            email VARCHAR(100),
-            phone VARCHAR(20),
-            parent_mobile VARCHAR(20),
-            class VARCHAR(50),
-            division VARCHAR(10),
-            dob DATE,
-            gender VARCHAR(10),
-            address1 TEXT,
-            address2 TEXT,
-            city VARCHAR(50),
-            state VARCHAR(50),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-          );
-        `);
-        
-        console.log('✅ Students table recreated with full schema');
-      } else {
-        // Just add any missing columns
-        await addColumnIfNotExists('first_name', 'VARCHAR(50)');
-        await addColumnIfNotExists('last_name', 'VARCHAR(50)');
-        await addColumnIfNotExists('parent_mobile', 'VARCHAR(20)');
-        await addColumnIfNotExists('class', 'VARCHAR(50)');
-        await addColumnIfNotExists('division', 'VARCHAR(10)');
-        await addColumnIfNotExists('dob', 'DATE');
-        await addColumnIfNotExists('gender', 'VARCHAR(10)');
-        await addColumnIfNotExists('address1', 'TEXT');
-        await addColumnIfNotExists('address2', 'TEXT');
-        await addColumnIfNotExists('city', 'VARCHAR(50)');
-        await addColumnIfNotExists('state', 'VARCHAR(50)');
-      }
-      
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS attendance (
-          id SERIAL PRIMARY KEY,
-          student_id VARCHAR(50) NOT NULL,
-          date DATE NOT NULL,
-          time TIME NOT NULL,
-          status VARCHAR(20) DEFAULT 'present',
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-      `);
-      
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS admins (
-          id SERIAL PRIMARY KEY,
-          username VARCHAR(50) UNIQUE NOT NULL,
-          password_hash VARCHAR(255) NOT NULL,
-          email VARCHAR(100),
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-      `);
-      
-      // Insert default admin if not exists
-      await client.query(`
-        INSERT INTO admins (username, password_hash, email) 
-        VALUES ('admin', 'admin123', 'admin@attendance.portal') 
-        ON CONFLICT (username) DO NOTHING
-      `);
-      
-      console.log('✅ Database tables initialized successfully');
-      client.release();
-      dbConnected = true;
-      return;
-    } catch (err) {
-      retryCount++;
-      console.error(`❌ Database connection attempt ${retryCount} failed:`, err.message);
-      if (retryCount < maxRetries) {
-        console.log(`⏳ Retrying in 5 seconds...`);
-        await new Promise(resolve => setTimeout(resolve, 5000));
-      }
-    }
+// Test database connection
+pool.connect((err, client, release) => {
+  if (err) {
+    console.error('❌ Database connection failed:', err.message);
+    console.error('Please check your database configuration in .env file');
+    console.error('Make sure PostgreSQL is running and the database exists');
+  } else {
+    console.log('✅ Connected to PostgreSQL database successfully');
+    release();
   }
-  
-  if (!dbConnected) {
-    console.error('❌ All database connection attempts failed. Initializing memory storage...');
-    memoryStorage = new MemoryStorage();
-    console.log('✅ Memory storage ready - application can accept data temporarily');
-  }
-}
-
-// Helper function to check database connection
-function isDbConnected() {
-  return dbConnected;
-}
-
-// Helper function to get storage (database or memory)
-function getStorage() {
-  return dbConnected ? pool : memoryStorage;
-}
-
-// Initialize database on startup
-initializeDatabase();
+});
 
 // Security middleware
 if (process.env.NODE_ENV === 'production') {
   app.use(helmet());
 } else {
-  // Development: Use helmet but allow inline scripts for forms
+  // Development: Completely disable HTTPS enforcement and upgrades
   app.use(helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'", "'unsafe-inline'"], // Allow inline scripts in development
         styleSrc: ["'self'", "'unsafe-inline'", "https:"],
-        upgradeInsecureRequests: null, // Disable HTTPS upgrade in development
+        upgradeInsecureRequests: null, // Completely disable HTTPS upgrade
       },
     },
     hsts: false, // Disable HTTPS enforcement
+    noSniff: false, // Allow content type sniffing in development
+    frameguard: false, // Disable X-Frame-Options in development
   }));
+  
+  // Add custom header to explicitly tell browser not to upgrade requests  
+  app.use((req, res, next) => {
+    res.removeHeader('Content-Security-Policy');
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https:;");
+    next();
+  });
 }
 
 // Rate limiting
@@ -256,6 +88,17 @@ app.use('/mark-attendance', limiter);
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json()); // Add JSON support for browser forms
 
+// Add comprehensive request logging middleware
+app.use((req, res, next) => {
+  const timestamp = new Date().toISOString();
+  console.log(`🌐 ${timestamp} - ${req.method} ${req.path}`);
+  console.log(`📋 Headers:`, req.headers);
+  if (req.body && Object.keys(req.body).length > 0) {
+    console.log(`📦 Body:`, req.body);
+  }
+  next();
+});
+
 // Add logging middleware for debugging
 app.use('/add-student', (req, res, next) => {
   console.log('=== INCOMING REQUEST TO /add-student ===');
@@ -269,188 +112,22 @@ app.use(express.static(__dirname));
 // Serve QR code images from /qrcodes
 app.use('/qrcodes', express.static(path.join(__dirname, 'qrcodes')));
 
-// Add middleware to handle database connection status
-app.use((req, res, next) => {
-  req.dbConnected = isDbConnected();
-  next();
-});
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-  let stats = null;
-  if (!req.dbConnected && memoryStorage) {
-    stats = memoryStorage.getStats();
-  }
-  
-  res.json({
-    status: 'running',
-    database: req.dbConnected ? 'connected' : 'disconnected',
-    storage: req.dbConnected ? 'postgresql' : 'memory',
-    timestamp: new Date().toISOString(),
-    memory_storage_ready: !!memoryStorage,
-    memory_stats: stats
-  });
-});
-
-// Debug endpoint for memory storage
-app.get('/debug/memory', (req, res) => {
-  if (req.dbConnected) {
-    return res.json({ message: 'Using database storage, no memory data available' });
-  }
-  
-  if (!memoryStorage) {
-    return res.json({ message: 'Memory storage not initialized' });
-  }
-  
-  res.json({
-    initialized: true,
-    data: memoryStorage.getAllData(),
-    stats: memoryStorage.getStats()
-  });
-});
-
-// Test endpoint to add a sample student
-app.get('/test/add-sample-student', async (req, res) => {
-  if (req.dbConnected) {
-    return res.json({ message: 'Using database, test not applicable' });
-  }
-  
-  if (!memoryStorage) {
-    return res.json({ error: 'Memory storage not initialized' });
-  }
-  
-  try {
-    const sampleStudent = {
-      student_id: 'TEST001',
-      name: 'Test Student',
-      first_name: 'Test',
-      last_name: 'Student',
-      phone: '1234567890',
-      email: 'test@example.com',
-      parent_mobile: '0987654321',
-      class: '10',
-      division: 'A',
-      dob: '2005-01-01',
-      gender: 'Male',
-      address1: '123 Test St',
-      city: 'Test City',
-      state: 'Test State'
-    };
-    
-    const result = await memoryStorage.addStudent(sampleStudent);
-    const stats = memoryStorage.getStats();
-    
-    res.json({
-      success: true,
-      student_added: result.rows[0],
-      stats: stats
-    });
-  } catch (error) {
-    res.json({
-      error: error.message,
-      details: error
-    });
-  }
-});
-
 // Root route - serve login page
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'login.html'));
 });
 
 // Serve home and students pages
+app.get('/home.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'home.html'));
+});
+
 app.get('/home', (req, res) => {
   res.sendFile(path.join(__dirname, 'home.html'));
 });
 
 app.get('/students', (req, res) => {
   res.sendFile(path.join(__dirname, 'students.html'));
-});
-
-// Test form for debugging registration
-app.get('/test-form', (req, res) => {
-  res.sendFile(path.join(__dirname, 'test-form.html'));
-});
-
-// Debug form for step-by-step testing
-app.get('/debug-form', (req, res) => {
-  res.sendFile(path.join(__dirname, 'debug-form.html'));
-});
-
-// Database reset endpoint for fixing schema issues
-app.get('/admin/reset-database', async (req, res) => {
-  if (!dbConnected) {
-    return res.status(500).json({ error: 'Database not connected' });
-  }
-  
-  try {
-    const client = await pool.connect();
-    
-    // Drop and recreate students table with all columns
-    await client.query('DROP TABLE IF EXISTS students CASCADE;');
-    await client.query('DROP TABLE IF EXISTS attendance CASCADE;');
-    
-    // Create students table with full schema
-    await client.query(`
-      CREATE TABLE students (
-        id SERIAL PRIMARY KEY,
-        student_id VARCHAR(50) UNIQUE NOT NULL,
-        name VARCHAR(100) NOT NULL,
-        first_name VARCHAR(50),
-        last_name VARCHAR(50),
-        email VARCHAR(100),
-        phone VARCHAR(20),
-        parent_mobile VARCHAR(20),
-        class VARCHAR(50),
-        division VARCHAR(10),
-        dob DATE,
-        gender VARCHAR(10),
-        address1 TEXT,
-        address2 TEXT,
-        city VARCHAR(50),
-        state VARCHAR(50),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-    
-    // Create attendance table
-    await client.query(`
-      CREATE TABLE attendance (
-        id SERIAL PRIMARY KEY,
-        student_id VARCHAR(50) NOT NULL,
-        date DATE NOT NULL,
-        time TIME NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (student_id) REFERENCES students(student_id)
-      );
-    `);
-    
-    client.release();
-    
-    res.json({ 
-      success: true, 
-      message: 'Database schema recreated successfully with all columns' 
-    });
-    
-  } catch (error) {
-    console.error('Database reset error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Simple, bulletproof registration form
-app.get('/simple-registration', (req, res) => {
-  res.sendFile(path.join(__dirname, 'simple-registration.html'));
-});
-
-// Redirect root to simple registration for testing
-app.get('/', (req, res) => {
-  res.redirect('/simple-registration');
-});
-
-// Status page for monitoring database connection
-app.get('/status', (req, res) => {
-  res.sendFile(path.join(__dirname, 'status.html'));
 });
 
 // Serve attendance and scan pages
@@ -461,9 +138,19 @@ app.get('/scan.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'scan.html'));
 });
 
-// Dashboard route - redirect to students page (main dashboard)
+// Dashboard route - redirect to home page (main dashboard)
 app.get('/dashboard', (req, res) => {
-  res.redirect('/students');
+  res.redirect('/home.html');
+});
+
+// Logout route
+app.post('/logout', (req, res) => {
+  // Since we're not using sessions, just redirect to login
+  res.json({ success: true, redirect: '/' });
+});
+
+app.get('/logout', (req, res) => {
+  res.redirect('/');
 });
 
 // API to get students with pagination and QR code URL
@@ -471,23 +158,14 @@ app.get('/api/students', async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const pageSize = 20;
   const offset = (page - 1) * pageSize;
-  
   try {
-    let result, total;
-    
-    if (req.dbConnected) {
-      result = await pool.query(
-        'SELECT * FROM students ORDER BY id LIMIT $1 OFFSET $2',
-        [pageSize, offset]
-      );
-      const countResult = await pool.query('SELECT COUNT(*) FROM students');
-      total = parseInt(countResult.rows[0].count);
-    } else {
-      const memResult = await memoryStorage.getStudents(pageSize, offset);
-      result = { rows: memResult.rows };
-      total = memResult.total;
-    }
-    
+    const result = await pool.query(
+      'SELECT * FROM students ORDER BY id LIMIT $1 OFFSET $2',
+      [pageSize, offset]
+    );
+    // Get total count for pagination
+    const countResult = await pool.query('SELECT COUNT(*) FROM students');
+    const total = parseInt(countResult.rows[0].count);
     const totalPages = Math.ceil(total / pageSize);
 
     // Add QR code image URL for each student
@@ -501,8 +179,7 @@ app.get('/api/students', async (req, res) => {
       total,
       page,
       pageSize,
-      totalPages,
-      storage: req.dbConnected ? 'database' : 'memory'
+      totalPages
     });
   } catch (err) {
     console.error('Error fetching students:', err);
@@ -512,64 +189,79 @@ app.get('/api/students', async (req, res) => {
 
 // Handle login page
 app.post('/dashboard', async (req, res) => {
+  console.log('🔐 LOGIN ATTEMPT RECEIVED');
+  console.log('Headers:', req.headers);
+  console.log('Body:', req.body);
+  
   const { username, password } = req.body;
 
   // Input validation
   if (!username || !password) {
+    console.log('❌ Missing username or password');
     return res.status(400).send('<h2>Username and password are required</h2><a href="/login.html">Try again</a>');
   }
 
+  console.log(`🔍 Attempting login for username: ${username}`);
+
   try {
-    let result;
+    // Get the user by username
+    console.log('📋 Querying database for user...');
+    const result = await pool.query(
+      'SELECT * FROM admins WHERE username = $1',
+      [username]
+    );
     
-    if (req.dbConnected) {
-      // Get the user by username from database
-      result = await pool.query(
-        'SELECT * FROM admins WHERE username = $1',
-        [username]
-      );
-    } else {
-      // Get the user from memory storage
-      result = await memoryStorage.getAdmin(username);
-    }
+    console.log(`📊 Database query result: ${result.rows.length} rows found`);
     
     if (result.rows.length === 0) {
-      console.log(`Login attempt failed for username: ${username} - user not found`);
+      console.log(`❌ Login attempt failed for username: ${username} - user not found`);
       return res.status(401).send('<h2>Invalid username or password</h2><a href="/login.html">Try again</a>');
     }
     
     const user = result.rows[0];
+    console.log(`👤 Found user: ${user.username}, checking password...`);
     
     // Check password - handle both hashed and plain text for migration period
     let passwordMatches = false;
     
     if (user.password_hash.startsWith('$2b$')) {
       // Bcrypt hashed password
+      console.log('🔒 Using bcrypt password verification');
       passwordMatches = await bcrypt.compare(password, user.password_hash);
     } else {
-      // Plain text password (for migration/memory storage)
+      // Plain text password (for migration) - not recommended for production
+      console.log('⚠️  Using plain text password verification');
       passwordMatches = user.password_hash === password;
       
-      // If using database and plain text password matches, hash it for future use
-      if (passwordMatches && req.dbConnected) {
+      // If plain text password matches, hash it for future use
+      if (passwordMatches) {
         const hashedPassword = await bcrypt.hash(password, parseInt(process.env.BCRYPT_ROUNDS) || 10);
         await pool.query(
           'UPDATE admins SET password_hash = $1 WHERE id = $2',
           [hashedPassword, user.id]
         );
-        console.log(`Password upgraded to hash for user: ${username}`);
+        console.log(`🔄 Password upgraded to hash for user: ${username}`);
       }
     }
 
+    console.log(`🔐 Password verification result: ${passwordMatches}`);
+
     if (passwordMatches) {
-      console.log(`✅ Successful login for user: ${username} (${req.dbConnected ? 'database' : 'memory'} storage)`);
-      res.redirect('/students'); // Redirect to students registration page
+      console.log(`✅ Successful login for user: ${username}`);
+      
+      // Always send JSON response for consistency
+      console.log('📤 Sending JSON success response');
+      res.json({ success: true, redirect: '/home.html' });
+      
     } else {
       console.log(`❌ Login attempt failed for username: ${username} - incorrect password`);
-      res.status(401).send('<h2>Invalid username or password</h2><a href="/login.html">Try again</a>');
+      
+      // Always send JSON error response for consistency
+      console.log('📤 Sending JSON error response');
+      res.status(401).json({ success: false, error: 'Invalid username or password' });
     }
   } catch (err) {
-    console.error('Login error:', err);
+    console.error('❌ Login error:', err);
     res.status(500).send('<h2>Internal server error</h2><a href="/login.html">Try again</a>');
   }
 });
@@ -579,16 +271,6 @@ app.post('/add-student', async (req, res) => {
   console.log('📝 Student registration request received');
   console.log('Content-Type:', req.headers['content-type']);
   console.log('Request body:', req.body);
-  console.log('📊 Storage type:', req.dbConnected ? 'database' : 'memory');
-  console.log('🔍 Memory storage initialized:', !!memoryStorage);
-  
-  if (!req.dbConnected && !memoryStorage) {
-    console.error('❌ Neither database nor memory storage available!');
-    return res.status(500).json({ 
-      error: 'Storage not available',
-      message: 'Neither database nor memory storage is ready'
-    });
-  }
   
   const {
     studentId,
@@ -627,59 +309,28 @@ app.post('/add-student', async (req, res) => {
     // Auto-generate student ID if not provided
     let finalStudentId = studentId;
     if (!finalStudentId) {
-      if (req.dbConnected) {
-        const countResult = await pool.query('SELECT COUNT(*) FROM students');
-        const count = parseInt(countResult.rows[0].count) + 1;
-        finalStudentId = `STU${count.toString().padStart(4, '0')}`;
-      } else {
-        const students = await memoryStorage.getStudents();
-        const count = students.total + 1;
-        finalStudentId = `STU${count.toString().padStart(4, '0')}`;
-      }
+      const countResult = await pool.query('SELECT COUNT(*) FROM students');
+      const count = parseInt(countResult.rows[0].count) + 1;
+      finalStudentId = `STU${count.toString().padStart(4, '0')}`;
     }
     
-    // Check if student ID already exists and insert student
-    if (req.dbConnected) {
-      const existingStudent = await pool.query(
-        'SELECT student_id FROM students WHERE student_id = $1',
-        [finalStudentId]
-      );
-      
-      if (existingStudent.rows.length > 0) {
-        return res.status(400).send('<h2>Student ID already exists</h2><a href="/students">Back to Students</a>');
-      }
-      
-      const result = await pool.query(
-        `INSERT INTO students (student_id, name, first_name, last_name, phone, email, parent_mobile, class, division, dob, gender, address1, address2, city, state) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
-        [finalStudentId, fullName, firstName, lastName, phoneNumber, email, parent_mobile, studentClass, division, dob, gender, address1, address2, city, state]
-      );
-      console.log('✅ Student inserted to database:', result.rows[0]);
-      var newStudent = result.rows[0];
-    } else {
-      // Use memory storage
-      const studentData = {
-        student_id: finalStudentId,
-        name: fullName,
-        first_name: firstName,
-        last_name: lastName,
-        phone: phoneNumber,
-        email: email,
-        parent_mobile: parent_mobile,
-        class: studentClass,
-        division: division,
-        dob: dob,
-        gender: gender,
-        address1: address1,
-        address2: address2,
-        city: city,
-        state: state
-      };
-      
-      const result = await memoryStorage.addStudent(studentData);
-      console.log('✅ Student added to memory storage:', result.rows[0]);
-      var newStudent = result.rows[0];
+    // Check if student ID already exists
+    const existingStudent = await pool.query(
+      'SELECT student_id FROM students WHERE student_id = $1',
+      [finalStudentId]
+    );
+    
+    if (existingStudent.rows.length > 0) {
+      return res.status(400).send('<h2>Student ID already exists</h2><a href="/students">Back to Students</a>');
     }
+    
+    const result = await pool.query(
+      `INSERT INTO students (student_id, name, first_name, last_name, phone, email, parent_mobile, class, division, dob, gender, address1, address2, city, state) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
+      [finalStudentId, fullName, firstName, lastName, phoneNumber, email, parent_mobile, studentClass, division, dob, gender, address1, address2, city, state]
+    );
+    console.log('Student inserted successfully:', result.rows[0]);
+    const newStudent = result.rows[0];
 
     // Generate QR code using Python service
     try {
@@ -725,7 +376,6 @@ app.post('/add-student', async (req, res) => {
           <p><strong>Phone:</strong> ${phoneNumber || 'N/A'}</p>
           <p><strong>Date of Birth:</strong> ${dob || 'N/A'}</p>
           <p><strong>Gender:</strong> ${gender || 'N/A'}</p>
-          <p><strong>Storage:</strong> <span style="color: ${req.dbConnected ? '#28a745' : '#ffc107'};">${req.dbConnected ? 'Database' : 'Memory (Temporary)'}</span></p>
         </div>
         <div style="margin:24px 0; text-align: center;">
           <h3>Student QR Code:</h3>
