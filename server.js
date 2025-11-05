@@ -2,12 +2,12 @@ const express = require('express');
 const axios = require('axios');
 const fs = require('fs');
 const bodyParser = require('body-parser');
-const { createDatabasePool } = require('./db-config');
 const { students, attendanceRecords } = require('./temp-data');
 const path = require('path');
 const bcrypt = require('bcrypt');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const QRCode = require('qrcode');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -29,41 +29,9 @@ if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN &&
   console.log('⚠️  Twilio credentials not configured - SMS notifications disabled');
 }
 
-// Create database pool using the new configuration
-const pool = createDatabasePool();
-
-// Test database connection with better error handling
-async function testDatabaseConnection() {
-  try {
-    console.log('🔄 Testing database connection...');
-    console.log('📍 Environment:', process.env.NODE_ENV);
-    console.log('🌐 DATABASE_URL exists:', !!process.env.DATABASE_URL);
-    
-    const client = await pool.connect();
-    console.log('✅ Connected to PostgreSQL database successfully');
-    
-    // Test a simple query
-    const result = await client.query('SELECT NOW()');
-    console.log('⏰ Database time:', result.rows[0].now);
-    
-    client.release();
-  } catch (err) {
-    console.error('❌ Database connection failed:', err.message);
-    console.error('🔍 Error details:', {
-      code: err.code,
-      errno: err.errno,
-      syscall: err.syscall,
-      hostname: err.hostname,
-      port: err.port
-    });
-    console.error('Please check your database configuration');
-    console.error('Make sure PostgreSQL is running and accessible');
-  }
-}
-
-// Call the test function
-testDatabaseConnection();
-
+console.log('🚀 Server starting with temporary data storage');
+console.log('� Total students loaded:', students.length);
+console.log('📝 Total attendance records loaded:', attendanceRecords.length);
 // Security middleware
 if (process.env.NODE_ENV === 'production') {
   app.use(helmet());
