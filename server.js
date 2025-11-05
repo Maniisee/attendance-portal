@@ -352,6 +352,7 @@ app.post('/add-student', async (req, res) => {
     console.log('❌ Validation failed - missing required fields');
     console.log('Required fields received:', { firstName, lastName, studentClass, division, parent_mobile });
     return res.status(400).json({ 
+      success: false,
       error: 'Missing required fields: firstName, lastName, class, division, and parent_mobile are required' 
     });
   }
@@ -374,7 +375,10 @@ app.post('/add-student', async (req, res) => {
     const existingStudent = students.find(s => s.studentId === finalStudentId);
     
     if (existingStudent) {
-      return res.status(400).send('<h2>Student ID already exists</h2><a href="/students">Back to Students</a>');
+      return res.status(400).json({
+        success: false,
+        error: 'Student ID already exists'
+      });
     }
 
     // Create new student object
@@ -426,39 +430,28 @@ app.post('/add-student', async (req, res) => {
     // Log recent students
     console.log('Recent students:', students.slice(-5));
     
-    // Display QR code image on success page
+    // Return JSON response for successful registration
     const qrImgUrl = `/qrcodes/${finalStudentId}.png`;
-    res.send(`
-      <div style="font-family: 'Roboto', Arial, sans-serif; padding: 40px; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #185a9d;">Student Registered Successfully!</h2>
-        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-          <p><strong>Student ID:</strong> ${finalStudentId}</p>
-          <p><strong>Name:</strong> ${fullName}</p>
-          <p><strong>Class:</strong> ${studentClass || 'N/A'}</p>
-          <p><strong>Division:</strong> ${division || 'N/A'}</p>
-          <p><strong>Phone:</strong> ${phoneNumber || 'N/A'}</p>
-          <p><strong>Date of Birth:</strong> ${dob || 'N/A'}</p>
-          <p><strong>Gender:</strong> ${gender || 'N/A'}</p>
-        </div>
-        <div style="margin:24px 0; text-align: center;">
-          <h3>Student QR Code:</h3>
-          <img src="${qrImgUrl}" alt="Student QR Code" style="max-width:200px;box-shadow:0 2px 8px #ccc;border-radius:8px;" />
-          <p style="font-size: 0.9em; color: #666;">Scan this QR code to mark attendance</p>
-        </div>
-        <div style="text-align: center; margin-top: 30px;">
-          <a href="/students" style="background: linear-gradient(90deg, #6a11cb 0%, #2575fc 100%); color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">Back to Students</a>
-        </div>
-      </div>
-    `);
+    res.json({
+      success: true,
+      message: 'Student registered successfully!',
+      student: {
+        studentId: finalStudentId,
+        name: fullName,
+        class: studentClass || 'N/A',
+        division: division || 'N/A',
+        phone: phoneNumber || 'N/A',
+        dateOfBirth: dob || 'N/A',
+        gender: gender || 'N/A',
+        qrCodeUrl: qrImgUrl
+      }
+    });
   } catch (err) {
     console.error('Error adding student:', err);
-    res.status(500).send(`
-      <div style="font-family: 'Roboto', Arial, sans-serif; padding: 40px; max-width: 600px; margin: 0 auto; text-align: center;">
-        <h2 style="color: #dc3545;">Error Adding Student</h2>
-        <p>Failed to add student. Please check the console for details.</p>
-        <a href="/students" style="background: #6c757d; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">Back to Students</a>
-      </div>
-    `);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to add student. Please try again.'
+    });
   }
 });
 

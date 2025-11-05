@@ -673,8 +673,10 @@
           body: JSON.stringify(data)
         });
         
-        if (res.ok) {
-          resultDiv.textContent = 'Student registered successfully!';
+        const result = await res.json();
+        
+        if (res.ok && result.success) {
+          resultDiv.textContent = result.message;
           resultDiv.className = 'form-result success';
           form.reset();
           
@@ -695,7 +697,7 @@
           let errorMessage = 'Failed to register student';
           try {
             const errorData = await res.json();
-            errorMessage = errorData.error || errorMessage;
+            errorMessage = errorData.error || errorData.message || errorMessage;
           } catch {
             errorMessage = await res.text() || errorMessage;
           }
