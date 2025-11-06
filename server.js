@@ -341,16 +341,13 @@ app.post('/add-student', async (req, res) => {
       });
     }
 
-    // Hash default password
-    const hashedPassword = await bcrypt.hash('password123', 10);
-
-    // Insert new student into database
+    // Insert new student into database (Railway schema: only 12 columns)
     const insertResult = await query(`
       INSERT INTO students (
         student_id, name, first_name, last_name, email, 
         phone, parent_mobile, class, division, 
-        dob, gender, address1, address2, city, state
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        dob, gender
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *
     `, [
       finalStudentId,
@@ -363,11 +360,7 @@ app.post('/add-student', async (req, res) => {
       studentClass,
       division,
       dob || '2000-01-01',
-      gender || 'N/A',
-      address1 || 'N/A',
-      address2 || '',
-      city || 'N/A',
-      state || 'N/A'
+      gender || 'N/A'
     ]);
 
     const newStudent = insertResult.rows[0];
