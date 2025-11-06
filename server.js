@@ -283,137 +283,33 @@ app.get('/api/students', async (req, res) => {
 
 // Add student
 app.post('/add-student', async (req, res) => {
-  console.log('📝 Student registration request received');
-  console.log('Content-Type:', req.headers['content-type']);
-  console.log('Request body:', req.body);
-  
-  const {
-    studentId,
-    firstName,
-    lastName,
-    name,
-    phone,
-    email,
-    parent_mobile,
-    class: studentClass,
-    division,
-    dob,
-    gender,
-    address1,
-    address2,
-    city,
-    state
-  } = req.body;
-  
-  // Comprehensive validation
-  if (!firstName || !lastName || !studentClass || !division || !parent_mobile) {
-    console.log('❌ Validation failed - missing required fields');
-    console.log('Required fields received:', { firstName, lastName, studentClass, division, parent_mobile });
-    return res.status(400).json({ 
-      success: false,
-      error: 'Missing required fields: firstName, lastName, class, division, and parent_mobile are required' 
-    });
-  }
-  
-  // Build full name
-  const fullName = name || `${firstName} ${lastName}`.trim();
-  
-  // Use parent_mobile as phone if phone is not provided
-  const phoneNumber = phone || parent_mobile;
-  
   try {
-    // Auto-generate student ID if not provided
-    let finalStudentId = studentId;
-    if (!finalStudentId) {
-      // Get count from database for auto-generation
-      const countResult = await query('SELECT COUNT(*) FROM students');
-      const count = parseInt(countResult.rows[0].count) + 1;
-      finalStudentId = `STU${count.toString().padStart(4, '0')}`;
+    const { firstName, lastName, class: studentClass, division, parent_mobile, email, gender, dob } = req.body;
+    
+    if (!firstName || !lastName || !studentClass || !division || !parent_mobile) {
+      return res.status(400).json({ success: false, error: 'Missing required fields' });
     }
     
-    // Check if student ID already exists
-    const existingResult = await query('SELECT student_id FROM students WHERE student_id = $1', [finalStudentId]);
+    const countResult = await query('SELECT COUNT(*) FROM students');
+    const count = parseInt(countResult.rows[0].count) + 1;
+    const studentId = `STU${count.toString().padStart(4, '0')}`;
+    const fullName = `${firstName} ${lastName}`;
     
-    if (existingResult.rows.length > 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Student ID already exists'
-      });
-    }
-
-    // Insert new student into database (Complete Railway schema: 16 columns)
-    const insertResult = await query(`
-      INSERT INTO students (
-        student_id, name, first_name, last_name, email, 
-        phone, parent_mobile, class, division, 
-        dob, gender, address1, address2, city, state
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-      RETURNING *
-    `, [
-      finalStudentId,
-      fullName,
-      firstName,
-      lastName,
-      email || `${firstName.toLowerCase()}.${lastName.toLowerCase()}@student.edu`,
-      phoneNumber,
-      parent_mobile,
-      studentClass,
-      division,
-      dob || '2000-01-01',
-      gender || 'N/A',
-      address1 || 'N/A',
-      address2 || '',
-      city || 'N/A',
-      state || 'N/A'
-    ]);
-
-    const newStudent = insertResult.rows[0];
-    console.log('✅ Student added to database successfully:', newStudent);
-
-    // Generate QR code
-    try {
-      console.log('Generating QR code for:', finalStudentId);
-      const qrData = `ID: ${finalStudentId}\nName: ${fullName}\nPhone: ${phoneNumber}\nEmail: ${newStudent.email}`;
-      const qrDataURL = await QRCode.toDataURL(qrData);
-
-      // Ensure qrcodes directory exists
-      const qrDir = path.join(__dirname, 'qrcodes');
-      if (!fs.existsSync(qrDir)) {
-        fs.mkdirSync(qrDir);
-        console.log('Created qrcodes directory:', qrDir);
-      }
-      
-      // Save QR code image to disk
-      const qrPath = path.join(qrDir, `${finalStudentId}.png`);
-      const base64Data = qrDataURL.replace(/^data:image\/png;base64,/, "");
-      fs.writeFileSync(qrPath, base64Data, 'base64');
-      console.log('QR code saved:', qrPath);
-    } catch (err) {
-      console.error('QR code generation failed:', err);
-    }
-
-    // Return JSON response for successful registration
-    const qrImgUrl = `/qrcodes/${finalStudentId}.png`;
+    const result = await query(
+      `INSERT INTO students (student_id, name, first_name, last_name, email, phone, parent_mobile, class, division, dob, gender) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      [studentId, fullName, firstName, lastName, email || `${firstName}@student.edu`, parent_mobile, parent_mobile, studentClass, division, dob || '2000-01-01', gender || 'N/A']
+    );
+    
     res.json({
       success: true,
       message: 'Student registered successfully!',
-      student: {
-        studentId: finalStudentId,
-        name: fullName,
-        class: studentClass || 'N/A',
-        division: division || 'N/A',
-        phone: phoneNumber || 'N/A',
-        dateOfBirth: dob || 'N/A',
-        gender: gender || 'N/A',
-        qrCodeUrl: qrImgUrl
-      }
+      student: { studentId, name: fullName, class: studentClass, division }
     });
-  } catch (err) {
-    console.error('❌ Error adding student:', err);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to add student. Please try again.'
-    });
+    
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
