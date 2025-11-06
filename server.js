@@ -1,7 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const bodyParser = require('body-parser');
-const { students, attendanceRecords } = require('./temp-data');
+const { query, pool } = require('./db-config');
 const path = require('path');
 const bcrypt = require('bcrypt');
 const helmet = require('helmet');
@@ -14,9 +14,8 @@ const port = process.env.PORT || 3000;
 // Load environment variables
 require('dotenv').config();
 
-console.log('🚀 Server starting with temporary data storage - CLEAN VERSION');
-console.log('📊 Total students loaded:', students.length);
-console.log('📝 Total attendance records loaded:', attendanceRecords.length);
+console.log('🚀 Server starting with PostgreSQL database connection');
+console.log('� Database configured for Railway PostgreSQL');
 
 // Security middleware
 if (process.env.NODE_ENV === 'production') {
@@ -75,19 +74,6 @@ app.get('/scan', (req, res) => {
   res.sendFile(path.join(__dirname, 'scan.html'));
 });
 
-// Admin/Student credentials
-const adminCredentials = {
-  username: 'admin',
-  password: bcrypt.hashSync('admin123', 10)
-};
-
-// Student login (they can use their student ID)
-const studentPasswords = {
-  'MCA001': bcrypt.hashSync('password123', 10),
-  'MCA002': bcrypt.hashSync('password123', 10),
-  'MCA003': bcrypt.hashSync('password123', 10)
-};
-
 // Login route with dual response handling
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
@@ -99,27 +85,41 @@ app.post('/login', async (req, res) => {
   try {
     let isValid = false;
     let userType = '';
+    let user = null;
 
-    // Check admin credentials
-    if (username === adminCredentials.username) {
-      isValid = await bcrypt.compare(password, adminCredentials.password);
-      userType = 'admin';
+    // Check admin credentials first
+    try {
+      const adminResult = await query('SELECT * FROM admin_users WHERE username = $1', [username]);
+      if (adminResult.rows.length > 0) {
+        const admin = adminResult.rows[0];
+        isValid = await bcrypt.compare(password, admin.password);
+        if (isValid) {
+          userType = 'admin';
+          user = admin;
+        }
+      }
+    } catch (error) {
+      console.error('Admin login query error:', error);
     }
-    // Check student credentials
-    else if (studentPasswords[username]) {
-      isValid = await bcrypt.compare(password, studentPasswords[username]);
-      userType = 'student';
-    }
-    // Check if username matches any student ID from temp data
-    else {
-      const student = students.find(s => s.studentId === username);
-      if (student && password === 'password123') {
-        isValid = true;
-        userType = 'student';
+
+    // If not admin, check student credentials
+    if (!isValid) {
+      try {
+        const studentResult = await query('SELECT * FROM students WHERE student_id = $1', [username]);
+        if (studentResult.rows.length > 0) {
+          const student = studentResult.rows[0];
+          isValid = await bcrypt.compare(password, student.password);
+          if (isValid) {
+            userType = 'student';
+            user = student;
+          }
+        }
+      } catch (error) {
+        console.error('Student login query error:', error);
       }
     }
 
-    if (isValid) {
+    if (isValid && user) {
       console.log('✅ Login successful:', { username, userType });
       
       if (isJsonRequest) {
@@ -127,7 +127,12 @@ app.post('/login', async (req, res) => {
           success: true, 
           message: 'Login successful',
           redirectUrl: '/home',
-          userType: userType
+          userType: userType,
+          user: {
+            id: user.id,
+            username: user.username || user.student_id,
+            name: user.full_name || `${user.first_name} ${user.last_name}`
+          }
         });
       } else {
         return res.redirect('/home');
@@ -170,9 +175,101 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// Get students API
-app.get('/api/students', (req, res) => {
+// Dashboard route (POST) - alternative login endpoint
+app.post('/dashboard', async (req, res) => {
+  const { username, password } = req.body;
+  console.log('📋 Dashboard login attempt:', { username, timestamp: new Date().toISOString() });
+
   try {
+    let isValid = false;
+    let userType = '';
+    let user = null;
+
+    // Check admin credentials first
+    try {
+      const adminResult = await query('SELECT * FROM admin_users WHERE username = $1', [username]);
+      if (adminResult.rows.length > 0) {
+        const admin = adminResult.rows[0];
+        isValid = await bcrypt.compare(password, admin.password);
+        if (isValid) {
+          userType = 'admin';
+          user = admin;
+        }
+      }
+    } catch (error) {
+      console.error('Admin login query error:', error);
+    }
+
+    // If not admin, check student credentials
+    if (!isValid) {
+      try {
+        const studentResult = await query('SELECT * FROM students WHERE student_id = $1', [username]);
+        if (studentResult.rows.length > 0) {
+          const student = studentResult.rows[0];
+          isValid = await bcrypt.compare(password, student.password);
+          if (isValid) {
+            userType = 'student';
+            user = student;
+          }
+        }
+      } catch (error) {
+        console.error('Student login query error:', error);
+      }
+    }
+
+    if (isValid && user) {
+      console.log('✅ Dashboard login successful:', { username, userType });
+      return res.redirect('/home');
+    } else {
+      console.log('❌ Dashboard login failed:', { username });
+      return res.status(401).send(`
+        <div style="font-family: Arial, sans-serif; padding: 40px; text-align: center;">
+          <h2 style="color: #dc3545;">Login Failed</h2>
+          <p>Invalid username or password.</p>
+          <a href="/login" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">Try Again</a>
+        </div>
+      `);
+    }
+  } catch (error) {
+    console.error('Dashboard login error:', error);
+    return res.status(500).send(`
+      <div style="font-family: Arial, sans-serif; padding: 40px; text-align: center;">
+        <h2 style="color: #dc3545;">Server Error</h2>
+        <p>Please try again later.</p>
+        <a href="/login" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">Back to Login</a>
+      </div>
+    `);
+  }
+});
+
+// Get students API
+app.get('/api/students', async (req, res) => {
+  try {
+    const result = await query('SELECT * FROM students ORDER BY student_id');
+    const students = result.rows.map(student => ({
+      // Provide both field formats for compatibility
+      studentId: student.student_id,
+      student_id: student.student_id,
+      name: `${student.first_name} ${student.last_name}`,
+      firstName: student.first_name,
+      lastName: student.last_name,
+      email: student.email,
+      phoneNumber: student.phone_number,
+      phone: student.phone_number,
+      parentContact: student.parent_mobile,
+      parent_mobile: student.parent_mobile,
+      class: student.class,
+      division: student.division,
+      dateOfBirth: student.date_of_birth,
+      gender: student.gender,
+      address: student.address,
+      city: student.city,
+      state: student.state,
+      postalCode: student.postal_code,
+      qrImageUrl: student.qr_image_url,
+      qr_img_url: student.qr_image_url
+    }));
+    
     res.json({
       success: true,
       students: students,
@@ -228,43 +325,55 @@ app.post('/add-student', async (req, res) => {
     // Auto-generate student ID if not provided
     let finalStudentId = studentId;
     if (!finalStudentId) {
-      const count = students.length + 1;
+      // Get count from database for auto-generation
+      const countResult = await query('SELECT COUNT(*) FROM students');
+      const count = parseInt(countResult.rows[0].count) + 1;
       finalStudentId = `STU${count.toString().padStart(4, '0')}`;
     }
     
     // Check if student ID already exists
-    const existingStudent = students.find(s => s.studentId === finalStudentId);
+    const existingResult = await query('SELECT student_id FROM students WHERE student_id = $1', [finalStudentId]);
     
-    if (existingStudent) {
+    if (existingResult.rows.length > 0) {
       return res.status(400).json({
         success: false,
         error: 'Student ID already exists'
       });
     }
 
-    // Create new student object
-    const newStudent = {
-      studentId: finalStudentId,
-      name: fullName,
-      firstName: firstName,
-      lastName: lastName,
-      phoneNumber: phoneNumber,
-      email: email || `${firstName.toLowerCase()}.${lastName.toLowerCase()}@student.edu`,
-      parentContact: parent_mobile,
-      class: studentClass,
-      division: division,
-      dateOfBirth: dob || 'N/A',
-      gender: gender || 'N/A',
-      address: `${address1 || ''} ${address2 || ''}`.trim() || 'N/A',
-      city: city || 'N/A',
-      state: state || 'N/A',
-      joinDate: new Date().toISOString().split('T')[0]
-    };
+    // Hash default password
+    const hashedPassword = await bcrypt.hash('password123', 10);
 
-    // Add to students array
-    students.push(newStudent);
-    
-    console.log('✅ Student added successfully:', newStudent);
+    // Insert new student into database
+    const insertResult = await query(`
+      INSERT INTO students (
+        student_id, password, first_name, last_name, email, 
+        phone_number, parent_mobile, class, division, 
+        date_of_birth, gender, address, city, state, 
+        postal_code, qr_image_url
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      RETURNING *
+    `, [
+      finalStudentId,
+      hashedPassword,
+      firstName,
+      lastName,
+      email || `${firstName.toLowerCase()}.${lastName.toLowerCase()}@student.edu`,
+      phoneNumber,
+      parent_mobile,
+      studentClass,
+      division,
+      dob || '2000-01-01',
+      gender || 'N/A',
+      `${address1 || ''} ${address2 || ''}`.trim() || 'N/A',
+      city || 'N/A',
+      state || 'N/A',
+      '000000',
+      `/qrcodes/${finalStudentId}.png`
+    ]);
+
+    const newStudent = insertResult.rows[0];
+    console.log('✅ Student added to database successfully:', newStudent);
 
     // Generate QR code
     try {
@@ -321,44 +430,41 @@ app.post('/mark-attendance', async (req, res) => {
   }
   
   try {
-    // Check if student exists
-    const student = students.find(s => s.studentId === studentId);
+    // Check if student exists in database
+    const studentResult = await query('SELECT * FROM students WHERE student_id = $1', [studentId]);
     
-    if (!student) {
+    if (studentResult.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Student not found.' });
     }
+
+    const student = studentResult.rows[0];
     
     // Check if attendance already marked today
     const today = new Date().toISOString().split('T')[0];
-    const existingAttendance = attendanceRecords.find(record => 
-      record.studentId === studentId && 
-      record.date === today
+    const existingResult = await query(
+      'SELECT * FROM attendance_records WHERE student_id = $1 AND date = $2', 
+      [studentId, today]
     );
     
-    if (existingAttendance) {
+    if (existingResult.rows.length > 0) {
       return res.json({ 
         success: false, 
-        message: `Attendance already marked for ${student.name} today.` 
+        message: `Attendance already marked for ${student.first_name} ${student.last_name} today.` 
       });
     }
     
     // Mark attendance
-    const newAttendanceRecord = {
-      id: attendanceRecords.length + 1,
-      studentId: studentId,
-      name: student.name,
-      firstName: student.firstName || student.name.split(' ')[0],
-      lastName: student.lastName || student.name.split(' ')[1] || '',
-      date: today,
-      timestamp: new Date().toISOString(),
-      status: 'present'
-    };
+    const now = new Date();
+    const timeIn = now.toTimeString().split(' ')[0]; // HH:MM:SS format
     
-    attendanceRecords.push(newAttendanceRecord);
+    await query(`
+      INSERT INTO attendance_records (student_id, date, time_in, status, location)
+      VALUES ($1, $2, $3, $4, $5)
+    `, [studentId, today, timeIn, 'present', 'College Campus']);
 
     res.json({ 
       success: true, 
-      message: `Attendance marked successfully for ${student.name} (ID: ${studentId})` 
+      message: `Attendance marked successfully for ${student.first_name} ${student.last_name} (ID: ${studentId})` 
     });
   } catch (err) {
     console.error('Error marking attendance:', err);
@@ -369,21 +475,61 @@ app.post('/mark-attendance', async (req, res) => {
 // Get attendance records for UI
 app.get('/api/attendance', async (req, res) => {
   try {
-    // Return attendance records sorted by timestamp (newest first)
-    const sortedRecords = attendanceRecords
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-      .slice(0, 100); // Limit to 100 most recent records
+    // Get attendance records from database with student details
+    const result = await query(`
+      SELECT 
+        ar.*,
+        s.first_name,
+        s.last_name,
+        s.class,
+        s.division
+      FROM attendance_records ar
+      JOIN students s ON ar.student_id = s.student_id
+      ORDER BY ar.date DESC, ar.time_in DESC
+      LIMIT 100
+    `);
     
-    res.json({ records: sortedRecords });
+    // Format records for frontend compatibility
+    const records = result.rows.map(record => ({
+      id: record.id,
+      studentId: record.student_id,
+      name: `${record.first_name} ${record.last_name}`,
+      firstName: record.first_name,
+      lastName: record.last_name,
+      class: record.class,
+      division: record.division,
+      date: record.date,
+      timestamp: record.created_at,
+      timeIn: record.time_in,
+      timeOut: record.time_out,
+      status: record.status,
+      location: record.location,
+      notes: record.notes
+    }));
+    
+    res.json({ records });
   } catch (err) {
     console.error('Error fetching attendance:', err);
     res.status(500).json({ error: 'Failed to fetch attendance records.' });
   }
 });
 
-app.listen(port, () => {
+app.listen(port, async () => {
   console.log(`🚀 Server running at http://localhost:${port}`);
   console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`📊 Students available: ${students.length}`);
-  console.log(`📝 Attendance records: ${attendanceRecords.length}`);
+  console.log(`🔗 Database: PostgreSQL configured`);
+  
+  // Get counts from database with timeout handling
+  try {
+    console.log('🔍 Checking database connectivity...');
+    const studentCount = await query('SELECT COUNT(*) FROM students');
+    const attendanceCount = await query('SELECT COUNT(*) FROM attendance_records');
+    console.log(`📊 Students in database: ${studentCount.rows[0].count}`);
+    console.log(`📝 Attendance records: ${attendanceCount.rows[0].count}`);
+    console.log('✅ Database connection verified');
+  } catch (error) {
+    console.error('❌ Database connection error:', error.message);
+    console.log('⚠️  Server will continue running, but database operations may fail');
+    console.log('💡 Tip: Check your Railway database connection or restart the server');
+  }
 });
