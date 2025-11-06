@@ -347,15 +347,14 @@ app.post('/add-student', async (req, res) => {
     // Insert new student into database
     const insertResult = await query(`
       INSERT INTO students (
-        student_id, password, first_name, last_name, email, 
-        phone_number, parent_mobile, class, division, 
-        date_of_birth, gender, address, city, state, 
-        postal_code, qr_image_url
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        student_id, name, first_name, last_name, email, 
+        phone, parent_mobile, class, division, 
+        dob, gender, address1, address2, city, state
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *
     `, [
       finalStudentId,
-      hashedPassword,
+      fullName,
       firstName,
       lastName,
       email || `${firstName.toLowerCase()}.${lastName.toLowerCase()}@student.edu`,
@@ -365,11 +364,10 @@ app.post('/add-student', async (req, res) => {
       division,
       dob || '2000-01-01',
       gender || 'N/A',
-      `${address1 || ''} ${address2 || ''}`.trim() || 'N/A',
+      address1 || 'N/A',
+      address2 || '',
       city || 'N/A',
-      state || 'N/A',
-      '000000',
-      `/qrcodes/${finalStudentId}.png`
+      state || 'N/A'
     ]);
 
     const newStudent = insertResult.rows[0];
