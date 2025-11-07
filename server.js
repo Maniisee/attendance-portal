@@ -309,15 +309,15 @@ app.post('/add-student', async (req, res) => {
     }
     
     const countResult = await query('SELECT COUNT(*) FROM students');
-    const count = parseInt(countResult.rows[0].count) + 1;
+    const count = parseInt(countResult.rows[0].count || countResult.rows[0]['COUNT(*)']) + 1;
     const studentId = `STU${count.toString().padStart(4, '0')}`;
     
-    // Insert into Vercel database with clean schema
+    // Insert with compatible parameter syntax (works for both PostgreSQL and SQLite)
     const result = await query(`
       INSERT INTO students (
         student_id, first_name, last_name, email, phone, parent_mobile, 
         class, division, dob, gender, address1, address2, city, state
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) 
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) 
       RETURNING *
     `, [
       studentId,

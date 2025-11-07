@@ -1,14 +1,14 @@
 const { query } = require('./db-config');
 
-// Database initialization script for Vercel PostgreSQL
+// Database initialization script for both PostgreSQL and SQLite
 async function initializeDatabase() {
-  console.log('🚀 Initializing Vercel PostgreSQL database...');
+  console.log('🚀 Initializing database...');
 
   try {
-    // Create students table
+    // Create students table (compatible with both PostgreSQL and SQLite)
     await query(`
       CREATE TABLE IF NOT EXISTS students (
-        id SERIAL PRIMARY KEY,
+        id INTEGER PRIMARY KEY,
         student_id VARCHAR(50) UNIQUE NOT NULL,
         first_name VARCHAR(50),
         last_name VARCHAR(50),
@@ -31,7 +31,7 @@ async function initializeDatabase() {
     // Create admin_users table
     await query(`
       CREATE TABLE IF NOT EXISTS admin_users (
-        id SERIAL PRIMARY KEY,
+        id INTEGER PRIMARY KEY,
         username VARCHAR(50) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
         email VARCHAR(100),
@@ -43,11 +43,10 @@ async function initializeDatabase() {
     // Create attendance_records table
     await query(`
       CREATE TABLE IF NOT EXISTS attendance_records (
-        id SERIAL PRIMARY KEY,
+        id INTEGER PRIMARY KEY,
         student_id VARCHAR(50) NOT NULL,
         timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        status VARCHAR(20) DEFAULT 'present',
-        FOREIGN KEY (student_id) REFERENCES students(student_id)
+        status VARCHAR(20) DEFAULT 'present'
       )
     `);
     console.log('✅ Attendance records table created');
@@ -56,12 +55,19 @@ async function initializeDatabase() {
     const bcrypt = require('bcrypt');
     const hashedPassword = await bcrypt.hash('admin123', 10);
     
-    await query(`
-      INSERT INTO admin_users (username, password, email) 
-      VALUES ($1, $2, $3) 
-      ON CONFLICT (username) DO NOTHING
-    `, ['admin', hashedPassword, 'admin@attendance.com']);
-    console.log('✅ Default admin user created (admin/admin123)');
+    try {
+      await query(`
+        INSERT INTO admin_users (username, password, email) 
+        VALUES (?, ?, ?)
+      `, ['admin', hashedPassword, 'admin@attendance.com']);
+      console.log('✅ Default admin user created (admin/admin123)');
+    } catch (error) {
+      if (error.message.includes('UNIQUE constraint failed') || error.message.includes('duplicate key')) {
+        console.log('ℹ️ Admin user already exists');
+      } else {
+        throw error;
+      }
+    }
 
     // Insert sample students
     const sampleStudents = [
@@ -73,11 +79,19 @@ async function initializeDatabase() {
     ];
 
     for (const student of sampleStudents) {
-      await query(`
-        INSERT INTO students (student_id, first_name, last_name, email, phone, parent_mobile, class, division, dob, gender, address1, city, state) 
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) 
-        ON CONFLICT (student_id) DO NOTHING
-      `, [...student, 'Sample Address', 'Sample City', 'Sample State']);
+      try {
+        await query(`
+          INSERT INTO students (student_id, first_name, last_name, email, phone, parent_mobile, class, division, dob, gender, address1, city, state) 
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [...student, 'Sample Address', 'Sample City', 'Sample State']);
+      } catch (error) {
+        if (error.message.includes('UNIQUE constraint failed') || error.message.includes('duplicate key')) {
+          // Student already exists, skip
+          continue;
+        } else {
+          throw error;
+        }
+      }
     }
     console.log('✅ Sample students added');
 

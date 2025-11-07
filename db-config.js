@@ -1,94 +1,115 @@
-const { Pool } = require('pg');
+const path = require('path');
 require('dotenv').config();
 
-// Database configuration - prioritize Vercel PostgreSQL
-let dbConfig;
+let db, query, transaction;
 
 if (process.env.POSTGRES_URL) {
   // Vercel PostgreSQL (Neon) - preferred
-  dbConfig = {
+  const { Pool } = require('pg');
+  
+  const dbConfig = {
     connectionString: process.env.POSTGRES_URL,
     ssl: { rejectUnauthorized: false },
     max: 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 5000,
   };
+  
+  const pool = new Pool(dbConfig);
   console.log('🚀 Using Vercel PostgreSQL (Neon)');
-} else if (process.env.DATABASE_URL) {
-  // Railway or other cloud providers (fallback)
-  dbConfig = {
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
-    max: 10,
-    idleTimeoutMillis: 20000,
-    connectionTimeoutMillis: 5000,
+  
+  query = async (text, params) => {
+    let client;
+    try {
+      client = await pool.connect();
+      const result = await client.query(text, params);
+      return result;
+    } catch (error) {
+      console.error('Database query error:', error.message);
+      throw error;
+    } finally {
+      if (client) client.release();
+    }
   };
-  console.log('🔗 Using external DATABASE_URL');
+  
+  transaction = async (callback) => {
+    let client;
+    try {
+      client = await pool.connect();
+      await client.query('BEGIN');
+      const result = await callback(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      if (client) await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      if (client) client.release();
+    }
+  };
+  
+  db = { pool, query, transaction };
+  
 } else {
-  // Local development
-  dbConfig = {
-    user: process.env.DB_USER || 'postgres',
-    host: process.env.DB_HOST || 'localhost',
-    database: process.env.DB_NAME || 'attendance_portal',
-    password: process.env.DB_PASSWORD || 'password',
-    port: process.env.DB_PORT || 5432,
-    ssl: false,
-    max: 20,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
+  // SQLite fallback - works instantly without any setup
+  const Database = require('better-sqlite3');
+  const dbPath = path.join(__dirname, 'attendance.db');
+  
+  db = new Database(dbPath);
+  console.log('� Using SQLite database (fallback)');
+  
+  // Enable foreign keys
+  db.pragma('foreign_keys = ON');
+  
+  query = async (text, params = []) => {
+    try {
+      // Convert PostgreSQL syntax to SQLite
+      let sqliteQuery = text
+        .replace(/\$(\d+)/g, '?')  // Replace $1, $2, etc. with ?
+        .replace(/SERIAL/gi, 'INTEGER')
+        .replace(/VARCHAR\(\d+\)/gi, 'TEXT')
+        .replace(/TIMESTAMP/gi, 'DATETIME')
+        .replace(/CURRENT_TIMESTAMP/gi, "datetime('now')")
+        .replace(/ON CONFLICT.*DO NOTHING/gi, 'OR IGNORE');
+      
+      if (sqliteQuery.toLowerCase().includes('select') || sqliteQuery.toLowerCase().includes('returning')) {
+        const stmt = db.prepare(sqliteQuery.replace(/RETURNING.*$/i, ''));
+        if (sqliteQuery.toLowerCase().includes('returning')) {
+          // For INSERT/UPDATE with RETURNING, do the operation then SELECT
+          const result = stmt.run(...params);
+          if (result.lastInsertRowid) {
+            const selectStmt = db.prepare('SELECT * FROM students WHERE id = ?');
+            const row = selectStmt.get(result.lastInsertRowid);
+            return { rows: [row] };
+          }
+          return { rows: [] };
+        } else {
+          const rows = stmt.all(...params);
+          return { rows };
+        }
+      } else {
+        const stmt = db.prepare(sqliteQuery);
+        const result = stmt.run(...params);
+        return { rows: [], changes: result.changes };
+      }
+    } catch (error) {
+      console.error('SQLite query error:', error.message);
+      throw error;
+    }
   };
-  console.log('💻 Using local PostgreSQL');
+  
+  transaction = async (callback) => {
+    const transaction = db.transaction(() => {
+      return callback({
+        query: async (text, params) => {
+          const result = await query(text, params);
+          return result;
+        }
+      });
+    });
+    return transaction();
+  };
 }
-
-// Create connection pool
-const pool = new Pool(dbConfig);
-
-// Test connection
-pool.on('connect', () => {
-  console.log('Connected to PostgreSQL database');
-});
-
-pool.on('error', (err) => {
-  console.error('PostgreSQL pool error:', err);
-});
-
-// Query helper function with better error handling
-const query = async (text, params) => {
-  let client;
-  try {
-    client = await pool.connect();
-    const result = await client.query(text, params);
-    return result;
-  } catch (error) {
-    console.error('Database query error:', error.message);
-    throw error;
-  } finally {
-    if (client) {
-      client.release();
-    }
-  }
-};
-
-// Transaction helper function with better error handling
-const transaction = async (callback) => {
-  let client;
-  try {
-    client = await pool.connect();
-    await client.query('BEGIN');
-    const result = await callback(client);
-    await client.query('COMMIT');
-    return result;
-  } catch (error) {
-    if (client) {
-      await client.query('ROLLBACK');
-    }
-    throw error;
-  } finally {
-    if (client) {
-      client.release();
-    }
-  }
-};
 
 module.exports = {
   pool,
