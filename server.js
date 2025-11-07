@@ -424,4 +424,4 @@ app.listen(port, async () => {
     console.log('⚠️  Server will continue running, but database operations may fail');
     console.log('💡 Tip: Check your Railway database connection or restart the server');
   }
-});
+});// Force redeploy Fri Nov  7 08:19:25 +08 2025
