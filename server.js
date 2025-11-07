@@ -295,10 +295,11 @@ app.post('/add-student', async (req, res) => {
     const studentId = `STU${count.toString().padStart(4, '0')}`;
     const fullName = `${firstName} ${lastName}`;
     
+    // Insert only into columns that exist in Railway schema
     const result = await query(
-      `INSERT INTO students (student_id, name, first_name, last_name, email, phone, parent_mobile, class, division, dob, gender) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-      [studentId, fullName, firstName, lastName, email || `${firstName}@student.edu`, parent_mobile, parent_mobile, studentClass, division, dob || '2000-01-01', gender || 'N/A']
+      `INSERT INTO students (student_id, first_name, last_name, email, phone, parent_mobile, class, division, dob, gender) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [studentId, firstName, lastName, email || `${firstName}@student.edu`, parent_mobile, parent_mobile, studentClass, division, dob || '2000-01-01', gender || 'N/A']
     );
     
     res.json({
