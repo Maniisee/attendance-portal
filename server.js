@@ -469,3 +469,4 @@ app.listen(port, async () => {
     console.log('💡 Tip: Check your Railway database connection or restart the server');
   }
 });// Force redeploy Fri Nov  7 08:19:25 +08 2025
+// Redeploy after Vercel DB creation
