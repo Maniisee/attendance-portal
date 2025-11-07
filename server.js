@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const bodyParser = require('body-parser');
 const { query, pool } = require('./db-config');
+const { initializeDatabase } = require('./init-db');
 const path = require('path');
 const bcrypt = require('bcrypt');
 const helmet = require('helmet');
@@ -15,7 +16,9 @@ const port = process.env.PORT || 3000;
 require('dotenv').config();
 
 console.log('🚀 Server starting with PostgreSQL database connection');
-console.log('� Database configured for Railway PostgreSQL');
+
+// Initialize database on startup
+initializeDatabase().catch(console.error);
 
 // Security middleware
 if (process.env.NODE_ENV === 'production') {
@@ -299,7 +302,7 @@ app.get('/debug/table-info', async (req, res) => {
 
 app.post('/add-student', async (req, res) => {
   try {
-    const { firstName, lastName, class: studentClass, division, parent_mobile, email, gender, dob } = req.body;
+    const { firstName, lastName, class: studentClass, division, parent_mobile, email, gender, dob, address1, address2, city, state } = req.body;
     
     if (!firstName || !lastName || !studentClass || !division || !parent_mobile) {
       return res.status(400).json({ success: false, error: 'Missing required fields' });
@@ -308,19 +311,45 @@ app.post('/add-student', async (req, res) => {
     const countResult = await query('SELECT COUNT(*) FROM students');
     const count = parseInt(countResult.rows[0].count) + 1;
     const studentId = `STU${count.toString().padStart(4, '0')}`;
-    const fullName = `${firstName} ${lastName}`;
     
-    // Insert only into columns that exist in Railway schema
-    const result = await query(
-      `INSERT INTO students (student_id, first_name, last_name, email, phone, parent_mobile, class, division, dob, gender) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-      [studentId, firstName, lastName, email || `${firstName}@student.edu`, parent_mobile, parent_mobile, studentClass, division, dob || '2000-01-01', gender || 'N/A']
-    );
+    // Insert into Vercel database with clean schema
+    const result = await query(`
+      INSERT INTO students (
+        student_id, first_name, last_name, email, phone, parent_mobile, 
+        class, division, dob, gender, address1, address2, city, state
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) 
+      RETURNING *
+    `, [
+      studentId,
+      firstName,
+      lastName,
+      email || `${firstName.toLowerCase()}.${lastName.toLowerCase()}@student.edu`,
+      parent_mobile,
+      parent_mobile,
+      studentClass,
+      division,
+      dob || '2000-01-01',
+      gender || 'N/A',
+      address1 || '',
+      address2 || '',
+      city || '',
+      state || ''
+    ]);
+    
+    const newStudent = result.rows[0];
+    console.log('✅ Student registered successfully:', newStudent);
     
     res.json({
       success: true,
       message: 'Student registered successfully!',
-      student: { studentId, name: fullName, class: studentClass, division }
+      student: {
+        studentId: newStudent.student_id,
+        name: `${newStudent.first_name} ${newStudent.last_name}`,
+        class: newStudent.class,
+        division: newStudent.division,
+        email: newStudent.email,
+        phone: newStudent.phone
+      }
     });
     
   } catch (error) {

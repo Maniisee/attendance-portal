@@ -1,36 +1,43 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-// Database configuration - use Railway DATABASE_URL if available
+// Database configuration - prioritize Vercel PostgreSQL
 let dbConfig;
 
-if (process.env.DATABASE_URL) {
-  // Use connection string (Railway or other cloud providers)
+if (process.env.POSTGRES_URL) {
+  // Vercel PostgreSQL (Neon) - preferred
+  dbConfig = {
+    connectionString: process.env.POSTGRES_URL,
+    ssl: { rejectUnauthorized: false },
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 5000,
+  };
+  console.log('🚀 Using Vercel PostgreSQL (Neon)');
+} else if (process.env.DATABASE_URL) {
+  // Railway or other cloud providers (fallback)
   dbConfig = {
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false },
-    max: 10, // Reduced pool size for Railway
-    idleTimeoutMillis: 20000, // Reduced idle timeout
-    connectionTimeoutMillis: 5000, // Increased connection timeout
-    acquireTimeoutMillis: 60000, // Add acquire timeout
-    createTimeoutMillis: 30000, // Add create timeout
-    destroyTimeoutMillis: 5000, // Add destroy timeout
-    reapIntervalMillis: 1000, // Add reap interval
-    createRetryIntervalMillis: 200, // Add retry interval
+    max: 10,
+    idleTimeoutMillis: 20000,
+    connectionTimeoutMillis: 5000,
   };
+  console.log('🔗 Using external DATABASE_URL');
 } else {
-  // Use individual parameters (local development)
+  // Local development
   dbConfig = {
     user: process.env.DB_USER || 'postgres',
     host: process.env.DB_HOST || 'localhost',
     database: process.env.DB_NAME || 'attendance_portal',
     password: process.env.DB_PASSWORD || 'password',
     port: process.env.DB_PORT || 5432,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    ssl: false,
     max: 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 2000,
   };
+  console.log('💻 Using local PostgreSQL');
 }
 
 // Create connection pool
