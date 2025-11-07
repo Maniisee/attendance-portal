@@ -282,6 +282,21 @@ app.get('/api/students', async (req, res) => {
 });
 
 // Add student
+// Debug endpoint to check table structure
+app.get('/debug/table-info', async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT column_name, data_type, is_nullable
+      FROM information_schema.columns 
+      WHERE table_name = 'students' 
+      ORDER BY ordinal_position
+    `);
+    res.json({ success: true, columns: result.rows });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
+});
+
 app.post('/add-student', async (req, res) => {
   try {
     const { firstName, lastName, class: studentClass, division, parent_mobile, email, gender, dob } = req.body;
